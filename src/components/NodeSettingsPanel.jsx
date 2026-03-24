@@ -330,7 +330,7 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
           value={settings.operator || '='}
           onChange={(e) => {
             const newOperator = e.target.value;
-            const allowedOperators = ['=', '!=', 'LIKE'];
+            const allowedOperators = ['=', '!=', 'LIKE', 'NOT LIKE'];
             if (!allowedOperators.includes(newOperator)) {
               return;
             }
@@ -341,6 +341,7 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
           <option value="=">=</option>
           <option value="!=">!=</option>
           <option value="LIKE">LIKE</option>
+          <option value="NOT LIKE">NOT LIKE</option>
         </select>
       </label>
       {!['EXISTS', 'NOT EXISTS'].includes(settings.operator) && (
@@ -550,24 +551,47 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
     );
   };
 
+  const LOGIC_OPTIONS = [
+    { value: 'AND', label: 'AND', description: 'Posts must match ALL connected filters' },
+    { value: 'OR', label: 'OR', description: 'Posts can match ANY connected filter' },
+    { value: 'UNION', label: 'UNION', description: 'Combines results from separate filter branches, removing duplicates' },
+    { value: 'UNION ALL', label: 'UNION ALL', description: 'Combines results from separate filter branches, keeping all duplicates' },
+  ];
+
   const renderLogicSettings = () => (
     <div>
-      <label style={{ display: 'block', marginBottom: '10px' }}>
-        Relation:
-        <select
-          value={settings.relation || 'AND'}
-          onChange={(e) => {
-            const newRelation = e.target.value;
-            if (newRelation === 'OR') {
-              return;
-            }
-            setSettings({ ...settings, relation: newRelation });
+      <div style={{ display: 'block', marginBottom: '10px', fontWeight: '500' }}>Relation:</div>
+      {LOGIC_OPTIONS.map((opt) => (
+        <label
+          key={opt.value}
+          style={{
+            display: 'block',
+            marginBottom: '12px',
+            padding: '10px',
+            background: (settings.relation || 'AND') === opt.value ? 'rgba(92, 75, 222, 0.2)' : 'transparent',
+            border: '1px solid #444',
+            borderRadius: '6px',
+            cursor: 'pointer',
           }}
-          style={{ width: '100%', padding: '5px', marginTop: '5px' }}
         >
-          <option value="AND">AND</option>
-        </select>
-      </label>
+          <input
+            type="radio"
+            name="qf-logic-relation"
+            value={opt.value}
+            checked={(settings.relation || 'AND') === opt.value}
+            onChange={() => {
+              const updatedSettings = { ...settings, relation: opt.value };
+              setSettings(updatedSettings);
+              onUpdate(node.id, updatedSettings);
+            }}
+            style={{ marginRight: '8px' }}
+          />
+          <span style={{ fontWeight: '500' }}>{opt.label}</span>
+          <div style={{ fontSize: '12px', color: '#a0aec0', marginTop: '4px', marginLeft: '24px' }}>
+            {opt.description}
+          </div>
+        </label>
+      ))}
     </div>
   );
 

@@ -5,6 +5,7 @@ const SortNode = ({ data, selected, id, onDelete }) => {
   const fieldLabel = data?.field || 'Field';
   const direction = data?.direction || 'ASC';
   const directionIcon = direction === 'ASC' ? '↑' : '↓';
+  const unconnected = data?.unconnected === true;
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -17,14 +18,16 @@ const SortNode = ({ data, selected, id, onDelete }) => {
     <div
       style={{
         background: selected ? '#4a5568' : '#2d3748',
-        border: selected ? '2px solid #5c4bde' : '1px solid #4a5568',
+        border: selected ? '2px solid #5c4bde' : unconnected ? '1px dashed #718096' : '1px solid #4a5568',
         borderRadius: '8px',
         padding: '15px',
         minWidth: '150px',
         color: '#fff',
         position: 'relative',
+        opacity: unconnected ? 0.7 : 1,
         boxShadow: selected ? '0 0 10px rgba(92, 75, 222, 0.5)' : '0 2px 4px rgba(0,0,0,0.2)',
       }}
+      title={unconnected ? 'Not connected to output' : undefined}
     >
       {onDelete && (
         <button

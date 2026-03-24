@@ -3,7 +3,7 @@
  * Plugin Name: Query Forge
  * Plugin URI: https://github.com/queryforgeplugin/Query-Forge
  * Description: Visual Node-Based Logic Engine for Elementor with React Flow interface.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Query Forge Development
  * Author URI: https://queryforgeplugin.com
  * License: GPL v2 or later
@@ -11,7 +11,8 @@
  * Text Domain: query-forge
  * Requires at least: 5.8
  * Requires PHP: 7.4
- * Elementor tested up to: 3.0.0
+ * Elementor tested up to: 3.2.0
+ * Requires Plugins: elementor
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -20,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // phpcs:disable WordPress.WP.I18n.TextDomainMismatch -- Text domain must be lowercase per WordPress.org requirements, but PluginCheck expects directory name match.
 
-define( 'QUERY_FORGE_VERSION', '1.0.0' );
+define( 'QUERY_FORGE_VERSION', '1.1.0' );
 define( 'QUERY_FORGE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'QUERY_FORGE_URL', plugin_dir_url( __FILE__ ) );
 define( 'QUERY_FORGE_FILE', __FILE__ );

@@ -69,21 +69,14 @@ final class Plugin {
 	 */
 	private function hooks() {
 		add_action( 'elementor/init', [ $this, 'on_elementor_init' ] );
-		// Suppress Elementor v2 editor script dependency warnings (WordPress 6.9.1+).
-		// These warnings are from Elementor's script registration, not our plugin.
-		add_filter( 'doing_it_wrong_trigger_error', [ $this, 'suppress_elementor_script_warnings' ], 10, 3 );
 		// Use elementor/editor/after_enqueue_scripts with very high priority to run after Elementor finishes script registration.
 		add_action( 'elementor/editor/after_enqueue_scripts', [ $this, 'enqueue_editor_scripts' ], 999 );
 		add_action( 'elementor/frontend/after_enqueue_styles', [ $this, 'enqueue_widget_styles' ] );
 		add_action( 'elementor/editor/after_enqueue_styles', [ $this, 'enqueue_widget_styles' ] );
 		add_action( 'wp_ajax_query_forge_get_meta_keys', [ $this, 'ajax_get_meta_keys' ] );
-		add_action( 'wp_ajax_nopriv_query_forge_get_meta_keys', [ $this, 'ajax_get_meta_keys' ] );
 		add_action( 'wp_ajax_query_forge_save_query', [ $this, 'ajax_save_query' ] );
-		add_action( 'wp_ajax_nopriv_query_forge_save_query', [ $this, 'ajax_save_query' ] );
 		add_action( 'wp_ajax_query_forge_get_saved_queries', [ $this, 'ajax_get_saved_queries' ] );
-		add_action( 'wp_ajax_nopriv_query_forge_get_saved_queries', [ $this, 'ajax_get_saved_queries' ] );
 		add_action( 'wp_ajax_query_forge_delete_query', [ $this, 'ajax_delete_query' ] );
-		add_action( 'wp_ajax_nopriv_query_forge_delete_query', [ $this, 'ajax_delete_query' ] );
 		add_action( 'wp_ajax_query_forge_load_more_posts', [ $this, 'ajax_load_more_posts' ] );
 		add_action( 'wp_ajax_nopriv_query_forge_load_more_posts', [ $this, 'ajax_load_more_posts' ] );
 	}
@@ -251,14 +244,6 @@ final class Plugin {
 			[],
 			QUERY_FORGE_VERSION
 		);
-		wp_enqueue_script(
-			'query_forge_widget',
-			QUERY_FORGE_URL . 'assets/js/qf-widget.js',
-			[ 'jquery' ],
-			QUERY_FORGE_VERSION,
-			true
-		);
-
 		wp_localize_script(
 			'query_forge_widget',
 			'QueryForgeWidget',
@@ -267,34 +252,6 @@ final class Plugin {
 				'nonce'   => wp_create_nonce( 'query_forge_nonce' ),
 			]
 		);
-	}
-
-	/**
-	 * Suppress Elementor v2 editor script dependency warnings
-	 *
-	 * WordPress 6.9.1+ validates script dependencies and shows notices when
-	 * Elementor's v2 editor scripts register dependencies that aren't registered yet.
-	 * This is an Elementor issue, not our plugin's issue. Suppress these warnings
-	 * only in Elementor editor context.
-	 *
-	 * @since 1.0.0
-	 * @param bool   $trigger Whether to trigger the error.
-	 * @param string $function_name The function that was called incorrectly.
-	 * @param string $message The error message.
-	 * @return bool Whether to trigger the error.
-	 */
-	public function suppress_elementor_script_warnings( $trigger, $function_name, $message ) {
-		// Only suppress in Elementor editor context.
-		if ( ! is_admin() || ! isset( $_GET['action'] ) || 'elementor' !== $_GET['action'] ) {
-			return $trigger;
-		}
-
-		// Suppress warnings about WP_Scripts::add for Elementor v2 editor scripts.
-		if ( 'WP_Scripts::add' === $function_name && false !== strpos( $message, 'elementor-v2-editor' ) ) {
-			return false; // Don't trigger the error.
-		}
-
-		return $trigger;
 	}
 
 	/**
@@ -489,7 +446,7 @@ final class Plugin {
 		$query_id = 'query_forge_query_' . md5( $query_data['name'] . time() );
 
 		// Save to WordPress options.
-		$saved = update_option( $query_id, $query_data );
+		$saved = update_option( $query_id, $query_data, false );
 
 		if ( $saved !== false ) {
 			// Also store in list of saved queries.
@@ -502,7 +459,7 @@ final class Plugin {
 				'name' => $query_data['name'],
 				'date' => current_time( 'mysql' ),
 			];
-			update_option( 'query_forge_saved_queries', $query_list );
+			update_option( 'query_forge_saved_queries', $query_list, false );
 
 			wp_send_json_success( [ 'message' => __( 'Query saved successfully.', 'query-forge' ), 'id' => $query_id ] );
 		} else {
@@ -526,10 +483,6 @@ final class Plugin {
 
 		$query_list = get_option( 'query_forge_saved_queries', [] );
 
-		// Debug: Log query list retrieval (only if WP_DEBUG is enabled).
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		}
-		
 		// Fetch full query data for each saved query.
 		$queries_with_data = [];
 		foreach ( $query_list as $query_id => $query_meta ) {
@@ -588,7 +541,7 @@ final class Plugin {
 		$query_list = get_option( 'query_forge_saved_queries', [] );
 		if ( is_array( $query_list ) && isset( $query_list[ $query_id ] ) ) {
 			unset( $query_list[ $query_id ] );
-			update_option( 'query_forge_saved_queries', $query_list );
+			update_option( 'query_forge_saved_queries', $query_list, false );
 		}
 
 		wp_send_json_success( [ 'message' => __( 'Query deleted successfully.', 'query-forge' ) ] );

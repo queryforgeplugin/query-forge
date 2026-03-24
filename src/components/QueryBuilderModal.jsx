@@ -21,6 +21,52 @@ import UpsellModal from './UpsellModal';
 import { validateGraph } from '../utils/validator';
 import { transformToSchema } from '../utils/schemaTransformer';
 
+// Derive label and style for each edge. Filter→Filter: solid, no label. Filter→Output: implicit OR only when standalone filters and schema has no query.paths.
+function applyImplicitEdgeLabels(nodes, edges, schema) {
+  const hasPaths = Array.isArray(schema?.query?.paths) && schema.query.paths.length > 0;
+  const filterIdsInPipeline = new Set(
+    edges
+      .filter((e) => nodes.find((n) => n.id === e.source)?.type === 'filter' && nodes.find((n) => n.id === e.target)?.type === 'filter')
+      .map((e) => e.target)
+  );
+  const outputNodeId = nodes.find((n) => n.type === 'target')?.id;
+
+  return edges.map((edge) => {
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    const targetNode = nodes.find((n) => n.id === edge.target);
+    let label = '';
+    let style = { stroke: '#555' };
+
+    if (sourceNode?.type === 'filter' && targetNode?.type === 'filter') {
+      label = '';
+      style = { stroke: '#555' };
+    } else if (sourceNode?.type === 'filter' && targetNode?.type === 'target') {
+      // No operator when schema has query.paths — clean solid, no label. Otherwise implicit OR when 2+ standalone filters.
+      if (!hasPaths) {
+        const isStandaloneFilter = !filterIdsInPipeline.has(edge.source);
+        const standaloneCountToThisOutput = edges.filter(
+          (e) =>
+            e.target === outputNodeId &&
+            nodes.find((n) => n.id === e.source)?.type === 'filter' &&
+            !filterIdsInPipeline.has(e.source)
+        ).length;
+        if (isStandaloneFilter && standaloneCountToThisOutput >= 2) {
+          label = 'implicit OR';
+          style = { stroke: '#555', strokeDasharray: '5,5' };
+        }
+      }
+    }
+
+    return {
+      ...edge,
+      label,
+      labelStyle: label ? { fill: '#888', fontSize: 10 } : undefined,
+      labelBgStyle: label ? { fill: 'transparent' } : undefined,
+      style,
+    };
+  });
+}
+
 const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
   // Parse initial data or create default nodes.
   const getInitialNodes = () => {
@@ -31,7 +77,7 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
           return parsed.nodes;
         }
       } catch (e) {
-        console.error('Failed to parse initial data:', e);
+        // Fall through to default nodes on parse error.
       }
     }
     // Default: Source + Target nodes.
@@ -59,7 +105,7 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
           return parsed.edges;
         }
       } catch (e) {
-        console.error('Failed to parse initial edges:', e);
+        // Fall through to default edges on parse error.
       }
     }
     return [];
@@ -78,9 +124,45 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
   // Free version - Pro features are not available
 
   const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params) => {
+      setEdges((eds) => {
+        const withNew = addEdge(params, eds);
+        const sourceNode = nodes.find((n) => n.id === params.source);
+        const targetNode = nodes.find((n) => n.id === params.target);
+        // When connecting a filter to a Logic node, remove any direct edge from that filter to a target node.
+        if (sourceNode?.type === 'filter' && targetNode?.type === 'logic') {
+          return withNew.filter((e) => {
+            const target = nodes.find((n) => n.id === e.target);
+            return !(e.source === params.source && target?.type === 'target');
+          });
+        }
+        return withNew;
+      });
+    },
+    [setEdges, nodes]
   );
+
+  // Single forward-walk transform: { schema, unconnectedNodeIds }; used for save and for unconnected UX.
+  const transformResult = React.useMemo(
+    () => transformToSchema(nodes, edges),
+    [nodes, edges]
+  );
+
+  // Derive edge labels from full graph state; pass schema so query.paths disables implicit OR.
+  const displayEdges = React.useMemo(
+    () => applyImplicitEdgeLabels(nodes, edges, transformResult.schema),
+    [nodes, edges, transformResult.schema]
+  );
+
+  // Nodes with data.unconnected set for those not on any path to Output (subtle indicator in node components).
+  const displayNodes = React.useMemo(() => {
+    const unconnectedSet = new Set(transformResult.unconnectedNodeIds || []);
+    return nodes.map((n) =>
+      unconnectedSet.has(n.id)
+        ? { ...n, data: { ...n.data, unconnected: true } }
+        : { ...n, data: { ...n.data, unconnected: false } }
+    );
+  }, [nodes, transformResult.unconnectedNodeIds]);
 
   const onNodeClick = useCallback((event, node) => {
     event.stopPropagation();
@@ -213,15 +295,15 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
     );
   }, [edges, nodes.length]);
 
-  // Create node types with delete handler
+  // Create node types with delete and update handlers
   const nodeTypes = React.useMemo(() => ({
     source: (props) => React.createElement(SourceNode, { ...props, onDelete: handleDeleteNode }),
     filter: (props) => React.createElement(FilterNode, { ...props, onDelete: handleDeleteNode }),
     sort: (props) => React.createElement(SortNode, { ...props, onDelete: handleDeleteNode }),
     inclusionExclusion: (props) => React.createElement(InclusionExclusionNode, { ...props, onDelete: handleDeleteNode }),
-    logic: (props) => React.createElement(LogicNode, { ...props, onDelete: handleDeleteNode }),
+    logic: (props) => React.createElement(LogicNode, { ...props, onDelete: handleDeleteNode, onUpdate: handleUpdateNode }),
     target: TargetNode,
-  }), [handleDeleteNode]);
+  }), [handleDeleteNode, handleUpdateNode]);
 
   const handleSave = () => {
     // Validate graph.
@@ -237,13 +319,9 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
 
     setValidationErrors([]);
 
-    // Transform to clean schema.
-    const cleanSchema = transformToSchema(nodes, edges);
-
-    // Save both formats.
+    const schema = transformResult.schema;
     const graphState = JSON.stringify({ nodes, edges });
-    const logicJson = JSON.stringify(cleanSchema);
-    // Call onSave with both.
+    const logicJson = JSON.stringify(schema);
     onSave({ graphState, logicJson });
   };
 
@@ -262,10 +340,9 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
       return;
     }
 
-    // Transform to clean schema.
-    const cleanSchema = transformToSchema(nodes, edges);
+    const schema = transformResult.schema;
     const graphState = JSON.stringify({ nodes, edges });
-    const logicJson = JSON.stringify(cleanSchema);
+    const logicJson = JSON.stringify(schema);
 
     // Get display settings from widget (we'll need to pass this from parent).
     // For now, save query structure.
@@ -520,8 +597,8 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
         {/* Canvas */}
         <div style={{ flex: 1, position: 'relative' }}>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayNodes}
+            edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}

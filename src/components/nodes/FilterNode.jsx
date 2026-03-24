@@ -9,6 +9,7 @@ const FilterNode = ({ data, selected, id, onDelete }) => {
     }
   };
 
+  const unconnected = data?.unconnected === true;
   return (
     <div
       style={{
@@ -17,9 +18,11 @@ const FilterNode = ({ data, selected, id, onDelete }) => {
         color: '#fff',
         borderRadius: '8px',
         minWidth: '150px',
-        border: selected ? '2px solid #fff' : '2px solid transparent',
+        border: selected ? '2px solid #fff' : unconnected ? '1px dashed #718096' : '2px solid transparent',
+        opacity: unconnected ? 0.7 : 1,
         position: 'relative',
       }}
+      title={unconnected ? 'Not connected to output' : undefined}
     >
       {onDelete && (
         <button
@@ -44,7 +47,9 @@ const FilterNode = ({ data, selected, id, onDelete }) => {
           ×
         </button>
       )}
-      <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Filter</div>
+      <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+        Filter{unconnected && <span style={{ fontSize: '10px', opacity: 0.8, marginLeft: '4px' }}>(not in query)</span>}
+      </div>
       {data && (
         <div style={{ fontSize: '11px', opacity: 0.9 }}>
           {data.field && <div>Field: {data.field}</div>}

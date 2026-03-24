@@ -38,6 +38,13 @@ class QF_Query_Parser {
 	 */
 	private static $active_where_filters = [];
 
+	/**
+	 * Run ID for the current get_query() call; used so posts_where only applies to our WP_Query.
+	 *
+	 * @var string|null
+	 */
+	private static $current_where_run_id = null;
+
 
 	/**
 	 * Allowed table names whitelist (for security)
@@ -80,84 +87,93 @@ class QF_Query_Parser {
 			return self::get_empty_query();
 		}
 
+		// Broken pathway = no output. If no complete path from Source to Target, return nothing.
+		if ( ! empty( $data['no_output'] ) ) {
+			return self::get_empty_query();
+		}
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+			$query_node = isset( $data['query'] ) ? $data['query'] : null;
+			$structure  = 'none';
+			if ( ! empty( $query_node ) && is_array( $query_node ) ) {
+				if ( ! empty( $query_node['filter'] ) ) {
+					$structure = 'single filter';
+				} elseif ( isset( $query_node['pipeline'] ) && is_array( $query_node['pipeline'] ) ) {
+					$structure = 'pipeline (' . count( $query_node['pipeline'] ) . ' steps)';
+				} elseif ( ! empty( $query_node['logic']['branches'] ) ) {
+					$structure = 'logic (' . count( $query_node['logic']['branches'] ) . ' branches)';
+				} elseif ( ! empty( $query_node['paths'] ) ) {
+					$structure = 'paths (' . count( $query_node['paths'] ) . ' paths)';
+				}
+			}
+			error_log( '[QF Schema Debug] Query generated: structure=' . $structure );
+			error_log( '[QF Schema Debug] Full schema (query part): ' . wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+		}
+
 		try {
-			// Get the current page number for pagination.
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- $_GET['paged'] is a public pagination parameter, not form data.
 			$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
-			
-			// Build query args from schema.
-			// Note: Dynamic values in include_exclude are resolved inside build_query_args().
+
 			$query_args = self::build_query_args( $data );
-			
-			// Explicitly set post_status based on context to ensure consistency between preview and frontend.
-			// Always set it explicitly to override WordPress defaults which vary by context.
-			// Determine source type before it gets removed.
 			$source_type = $query_args['_qf_source_type'] ?? 'post_type';
-			
+
 			if ( ! empty( $query_args['post_type'] ) && 'post_type' === $source_type ) {
-				// Only override if post_status wasn't explicitly set by user in filters.
-				$user_set_post_status = false;
-				if ( ! empty( $data['filters']['clauses'] ) ) {
-					foreach ( $data['filters']['clauses'] as $clause ) {
-						if ( ! empty( $clause['field'] ) && 'post_status' === $clause['field'] ) {
-							$user_set_post_status = true;
-							break;
-						}
-					}
-				}
-				
+				$user_set_post_status = self::query_contains_post_status_filter( isset( $data['query'] ) ? $data['query'] : null );
 				if ( ! $user_set_post_status ) {
 					if ( $is_preview ) {
-						// In preview/editor mode, allow all statuses that Elementor typically shows.
 						$query_args['post_status'] = [ 'publish', 'draft', 'pending', 'future', 'private', 'acf-disabled' ];
 					} else {
-						// On frontend, only show published posts (and private if user can view them).
-						// Use 'any' and then filter in SQL to ensure WordPress doesn't override our selection.
 						$query_args['post_status'] = [ 'publish', 'private' ];
 					}
-					
-					// Force WordPress to respect our post_status by suppressing default status filtering
-					// This prevents WordPress from adding its own status filters based on context
-					$query_args['suppress_filters'] = false; // We want our filters, but not WordPress's default status filtering
+					$query_args['suppress_filters'] = false;
 				}
 			}
 
-			// Add pagination to query args.
-			$query_args['paged'] = $paged;
-
-			// Resolve dynamic values (magic tags) in other query args (not include_exclude, already done).
-			// Exclude post__in, post__not_in, author__in, author__not_in from second pass since they're already processed.
 			$query_args = self::resolve_dynamic_values( $query_args );
+			unset( $query_args['_qf_source_type'] );
 
-			// Determine source type
-			$source_type = $query_args['_qf_source_type'] ?? 'post_type';
-			unset( $query_args['_qf_source_type'] ); // Remove from query args
+			$joins = isset( $data['joins'] ) && is_array( $data['joins'] ) ? $data['joins'] : [];
+			self::add_join_filters( $joins );
 
-			// Add where filters if needed (for post_content exact matching).
-			if ( 'post_type' === $source_type && ! empty( $query_args['_qf_content_filters'] ) ) {
-				self::add_where_filters( $query_args['_qf_content_filters'] );
-				unset( $query_args['_qf_content_filters'] ); // Remove from query args
-			}
-
-			// Execute query based on source type.
-			if ( 'post_type' === $source_type ) {
-				// Standard WP_Query for posts.
-				$query = new \WP_Query( $query_args );
-				
-				self::remove_join_filters();
-				self::remove_where_filters();
-				
-				return $query;
-			} elseif ( in_array( $source_type, [ 'user', 'comment', 'sql_table', 'rest_api' ], true ) ) {
+			if ( 'post_type' !== $source_type ) {
 				self::remove_join_filters();
 				self::remove_where_filters();
 				return self::get_empty_query();
 			}
 
-			// Default: return empty query for unknown source types.
+			$query_node = isset( $data['query'] ) ? $data['query'] : null;
+			$has_query  = ! empty( $query_node ) && is_array( $query_node ) && (
+				( isset( $query_node['filter'] ) && is_array( $query_node['filter'] ) ) ||
+				( isset( $query_node['pipeline'] ) && is_array( $query_node['pipeline'] ) && count( $query_node['pipeline'] ) > 0 ) ||
+				( ! empty( $query_node['logic'] ) && is_array( $query_node['logic'] ) && ! empty( $query_node['logic']['branches'] ) && is_array( $query_node['logic']['branches'] ) ) ||
+				( isset( $query_node['paths'] ) && is_array( $query_node['paths'] ) && count( $query_node['paths'] ) > 0 )
+			);
+
+			if ( ! $has_query ) {
+				// query absent or empty: no restriction — plain WP_Query with source + target pagination.
+				$query_args['paged'] = $paged;
+				$query = new \WP_Query( $query_args );
+				self::remove_join_filters();
+				self::remove_where_filters();
+				return $query;
+			}
+
+			$post_ids = self::execute_query( $query_node, $query_args, null );
+
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				error_log( '[QF Schema Debug] Query execution complete. Final combined post__in count: ' . count( $post_ids ) );
+			}
+
+			$final_args = $query_args;
+			unset( $final_args['_qf_where_filters'] );
+			$final_args['post__in'] = ! empty( $post_ids ) ? array_map( 'absint', $post_ids ) : [ 0 ];
+			$final_args['paged']   = $paged;
+
+			$query = new \WP_Query( $final_args );
+
 			self::remove_join_filters();
 			self::remove_where_filters();
-			return self::get_empty_query();
+			return $query;
 		} catch ( \Exception $e ) {
 			// SECURITY FIX: Ensure filters are removed even on error.
 			self::remove_join_filters();
@@ -286,10 +302,8 @@ class QF_Query_Parser {
 						if ( isset( $orderby_map[ $field ] ) ) {
 							$orderby_value = $orderby_map[ $field ];
 							
-							// Free version: only allow basic sort options (ID, title, date).
-							$free_allowed_sorts = [ 'ID', 'title', 'date' ];
-							if ( ! in_array( $orderby_value, $free_allowed_sorts, true ) ) {
-								// Fallback to 'date' for PRO-only sort options.
+							$allowed_sorts = [ 'ID', 'title', 'date' ];
+							if ( ! in_array( $orderby_value, $allowed_sorts, true ) ) {
 								$orderby_value = 'date';
 							}
 							
@@ -308,26 +322,7 @@ class QF_Query_Parser {
 			}
 		}
 
-		// Build filters - separate standard fields and meta fields.
-		if ( ! empty( $data['filters'] ) && is_array( $data['filters'] ) ) {
-			// Split filters into standard and meta.
-			$standard_filters = self::extract_standard_filters( $data['filters'] );
-			$meta_filters = self::extract_meta_filters( $data['filters'] );
-
-			// Apply standard field filters directly to WP_Query args.
-			if ( ! empty( $standard_filters ) ) {
-				self::apply_standard_filters( $args, $standard_filters );
-			}
-
-			// Build meta_query for meta fields.
-			if ( ! empty( $meta_filters ) ) {
-				$meta_query = self::build_meta_query( $meta_filters );
-			if ( ! empty( $meta_query ) ) {
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Meta queries are a core feature of the query builder.
-				$args['meta_query'] = $meta_query;
-				}
-			}
-		}
+		// Query (filter/pipeline/logic) is executed by execute_query() in get_query(); not applied here.
 
 		// Build tax_query from filters.
 		if ( ! empty( $data['tax_filters'] ) && is_array( $data['tax_filters'] ) ) {
@@ -409,50 +404,297 @@ class QF_Query_Parser {
 	}
 
 	/**
-	 * Build meta_query from filter clauses
+	 * Check if the query tree contains a post_status filter (for default post_status override).
 	 *
-	 * @since 1.0.0
-	 * @param array $filters Filter structure.
-	 * @return array Meta query array.
+	 * @param array|null $query_node Query node (filter, pipeline, or logic).
+	 * @return bool True if any filter in the tree has field post_status.
 	 */
-	private static function build_meta_query( $filters ) {
-		$meta_query = [];
-
-		// Free version: enforce AND-only relation (OR is PRO-only).
-		$meta_query['relation'] = 'AND';
-
-		// Process clauses.
-		if ( ! empty( $filters['clauses'] ) && is_array( $filters['clauses'] ) ) {
-			$clause_count = 0;
-			foreach ( $filters['clauses'] as $clause ) {
-				if ( ! is_array( $clause ) ) {
-					continue;
-				}
-
-				// Free version: enforce single meta key only (multiple meta keys are PRO-only).
-				if ( $clause_count >= 1 ) {
-					// Skip additional meta clauses in Free version.
-					continue;
-				}
-
-				// Nested groups are PRO-only - skip them in Free version.
-				if ( isset( $clause['relation'] ) && ! empty( $clause['clauses'] ) ) {
-					continue;
-				}
-
-				// Regular filter clause.
-				if ( ! empty( $clause['field'] ) ) {
-					$meta_clause = self::build_meta_clause( $clause );
-					if ( ! empty( $meta_clause ) ) {
-						$meta_query[] = $meta_clause;
-						$clause_count++;
-					}
+	private static function query_contains_post_status_filter( $query_node ) {
+		if ( empty( $query_node ) || ! is_array( $query_node ) ) {
+			return false;
+		}
+		if ( ! empty( $query_node['filter'] ) && is_array( $query_node['filter'] ) ) {
+			$field = isset( $query_node['filter']['field'] ) ? $query_node['filter']['field'] : '';
+			if ( 'post_status' === $field ) {
+				return true;
+			}
+		}
+		if ( ! empty( $query_node['pipeline'] ) && is_array( $query_node['pipeline'] ) ) {
+			foreach ( $query_node['pipeline'] as $step ) {
+				if ( self::query_contains_post_status_filter( $step ) ) {
+					return true;
 				}
 			}
 		}
+		if ( ! empty( $query_node['logic']['branches'] ) && is_array( $query_node['logic']['branches'] ) ) {
+			foreach ( $query_node['logic']['branches'] as $branch ) {
+				if ( self::query_contains_post_status_filter( $branch ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 
-		// Only return if we have clauses (more than just relation).
-		return count( $meta_query ) > 1 ? $meta_query : [];
+	/**
+	 * Execute a query node (filter, pipeline, or logic) and return post IDs.
+	 * Empty pipeline/branches = no restriction: run one WP_Query with base args and return IDs.
+	 *
+	 * @param array|null $query_node Query node: { filter }, { pipeline: [ steps ] }, or { logic: { relation, branches } }.
+	 * @param array      $base_args  Base WP_Query args (post_type, post_status, etc.).
+	 * @param array|null $post_in    Optional. Restrict to these post IDs. null = no restriction. Empty array = return [].
+	 * @return array Post IDs (never null).
+	 */
+	private static function execute_query( $query_node, $base_args, $post_in = null ) {
+		if ( is_array( $post_in ) && empty( $post_in ) ) {
+			return [];
+		}
+
+		// No node or empty: no restriction — run one WP_Query with base args (and post_in if provided).
+		if ( empty( $query_node ) || ! is_array( $query_node ) ) {
+			return self::run_query_for_ids( $base_args, $post_in );
+		}
+
+		// Single filter.
+		if ( ! empty( $query_node['filter'] ) && is_array( $query_node['filter'] ) ) {
+			return self::run_filter_for_ids( $query_node['filter'], $base_args, $post_in );
+		}
+
+		// Pipeline: sequential steps, each narrows the result.
+		if ( array_key_exists( 'pipeline', $query_node ) && is_array( $query_node['pipeline'] ) ) {
+			$steps = $query_node['pipeline'];
+			if ( empty( $steps ) ) {
+				return self::run_query_for_ids( $base_args, $post_in );
+			}
+			$current_ids = null;
+			foreach ( $steps as $step ) {
+				if ( ! empty( $step['include_exclude'] ) && is_array( $step['include_exclude'] ) ) {
+					if ( null === $current_ids ) {
+						$current_ids = self::run_query_for_ids( $base_args, $post_in );
+					}
+					$current_ids = self::apply_include_exclude_to_ids( $current_ids, $step['include_exclude'] );
+				} else {
+					$current_ids = self::execute_query( $step, $base_args, $current_ids );
+				}
+				if ( empty( $current_ids ) ) {
+					return [];
+				}
+			}
+			return $current_ids;
+		}
+
+		// Logic: branches in parallel, combined by relation.
+		if ( ! empty( $query_node['logic'] ) && is_array( $query_node['logic'] ) ) {
+			$relation = isset( $query_node['logic']['relation'] ) ? strtoupper( sanitize_text_field( $query_node['logic']['relation'] ) ) : 'AND';
+			$branches = isset( $query_node['logic']['branches'] ) && is_array( $query_node['logic']['branches'] ) ? $query_node['logic']['branches'] : [];
+			if ( empty( $branches ) ) {
+				return self::run_query_for_ids( $base_args, $post_in );
+			}
+			$branch_results = [];
+			foreach ( $branches as $branch ) {
+				$branch_results[] = self::execute_query( $branch, $base_args, $post_in );
+			}
+			return self::combine_logic_ids( $relation, $branch_results );
+		}
+
+		// Paths: multiple independent paths (no Logic node). Execute each, merge IDs with array_unique(array_merge(...)).
+		if ( isset( $query_node['paths'] ) && is_array( $query_node['paths'] ) && ! empty( $query_node['paths'] ) ) {
+			$path_results = [];
+			foreach ( $query_node['paths'] as $path ) {
+				$path_results[] = self::execute_query( $path, $base_args, null );
+			}
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				foreach ( $path_results as $idx => $ids ) {
+					$path_num = $idx + 1;
+					$arr     = is_array( $ids ) ? $ids : [];
+					error_log( '[QF Schema Debug] Path ' . $path_num . ' (before merge): count=' . count( $arr ) . ', ids=' . wp_json_encode( $arr ) );
+				}
+			}
+			$merged = [];
+			foreach ( $path_results as $ids ) {
+				$merged = array_merge( $merged, is_array( $ids ) ? $ids : [] );
+			}
+			$merged = array_values( array_unique( $merged ) );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				error_log( '[QF Schema Debug] After merge: count=' . count( $merged ) . ', ids=' . wp_json_encode( $merged ) );
+			}
+			return $merged;
+		}
+
+		// Unknown shape: no restriction.
+		return self::run_query_for_ids( $base_args, $post_in );
+	}
+
+	/**
+	 * Run a single WP_Query with base args (and optional post__in) and return post IDs.
+	 *
+	 * @param array      $base_args Base args (post_type, post_status, etc.).
+	 * @param array|null $post_in   Optional. Restrict to these IDs.
+	 * @return array Post IDs.
+	 */
+	private static function run_query_for_ids( $base_args, $post_in = null ) {
+		$args = array_merge( $base_args, [
+			'no_found_rows'     => true,
+			'posts_per_page'    => -1,
+			'fields'            => 'ids',
+			'suppress_filters'  => false,
+		] );
+		unset( $args['paged'] );
+		if ( is_array( $post_in ) && ! empty( $post_in ) ) {
+			$args['post__in'] = array_map( 'absint', $post_in );
+		}
+		$query = new \WP_Query( $args );
+		$ids = $query->posts;
+		return is_array( $ids ) ? $ids : [];
+	}
+
+	/**
+	 * Run a single filter and return post IDs.
+	 *
+	 * @param array      $filter    Single filter object (field, operator, value, value_type).
+	 * @param array      $base_args Base WP_Query args.
+	 * @param array|null $post_in   Optional. Restrict to these IDs.
+	 * @return array Post IDs.
+	 */
+	private static function run_filter_for_ids( $filter, $base_args, $post_in = null ) {
+		$args = array_merge( [], $base_args );
+		$args['no_found_rows']  = true;
+		$args['posts_per_page'] = -1;
+		$args['fields']         = 'ids';
+		$args['suppress_filters'] = false;
+		unset( $args['paged'] );
+		if ( is_array( $post_in ) && ! empty( $post_in ) ) {
+			$args['post__in'] = array_map( 'absint', $post_in );
+		}
+
+		$field = isset( $filter['field'] ) ? sanitize_text_field( $filter['field'] ) : '';
+		if ( empty( $field ) ) {
+			return self::run_query_for_ids( $base_args, $post_in );
+		}
+
+		// Fix: If the filter operator requires a value but the value is missing/empty,
+		// drop this filter node (do not block the query).
+		$operator = isset( $filter['operator'] ) ? strtoupper( sanitize_text_field( $filter['operator'] ) ) : '=';
+		$requires_value_ops = [ '=', '!=', 'LIKE', 'NOT LIKE' ];
+		$value_provided = array_key_exists( 'value', $filter ) && $filter['value'] !== '';
+		if ( in_array( $operator, $requires_value_ops, true ) && ! $value_provided ) {
+			return self::run_query_for_ids( $base_args, $post_in );
+		}
+
+		if ( self::is_standard_field( $field ) ) {
+			self::apply_standard_filters( $args, [ 'clauses' => [ $filter ] ] );
+		} else {
+			$meta_clause = self::build_meta_clause( $filter );
+			if ( ! empty( $meta_clause ) ) {
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Meta queries are a core feature of the query builder.
+				$args['meta_query'] = [ 'relation' => 'AND', $meta_clause ];
+			}
+		}
+
+		if ( ! empty( $args['_qf_where_filters'] ) ) {
+			self::$current_where_run_id = uniqid( 'qf_where_', true );
+			$args['_qf_where_run_id']   = self::$current_where_run_id;
+			self::add_where_filters( $args['_qf_where_filters'] );
+			unset( $args['_qf_where_filters'] );
+		}
+
+		$query = new \WP_Query( $args );
+		self::remove_where_filters();
+
+		$ids = $query->posts;
+		return is_array( $ids ) ? $ids : [];
+	}
+
+	/**
+	 * Apply include_exclude to an array of post IDs (intersect, subtract, author filter).
+	 *
+	 * @param array $ids            Post IDs.
+	 * @param array $include_exclude Keys: post__in, post__not_in, author__in, author__not_in, ignore_sticky_posts.
+	 * @return array Filtered post IDs.
+	 */
+	private static function apply_include_exclude_to_ids( $ids, $include_exclude ) {
+		if ( ! is_array( $ids ) || ! is_array( $include_exclude ) ) {
+			return $ids;
+		}
+		$resolved = self::resolve_dynamic_values( $include_exclude );
+		if ( ! empty( $resolved['post__in'] ) ) {
+			$post_in = is_array( $resolved['post__in'] ) ? array_map( 'absint', $resolved['post__in'] ) : wp_parse_id_list( $resolved['post__in'] );
+			if ( ! empty( $post_in ) ) {
+				$ids = array_intersect( $ids, $post_in );
+			}
+		}
+		if ( ! empty( $resolved['post__not_in'] ) ) {
+			$post_not_in = is_array( $resolved['post__not_in'] ) ? array_map( 'absint', $resolved['post__not_in'] ) : wp_parse_id_list( $resolved['post__not_in'] );
+			if ( ! empty( $post_not_in ) ) {
+				$ids = array_diff( $ids, $post_not_in );
+			}
+		}
+		if ( ! empty( $resolved['author__in'] ) || ! empty( $resolved['author__not_in'] ) ) {
+			$keep = [];
+			foreach ( $ids as $id ) {
+				$post = get_post( $id );
+				if ( ! $post ) {
+					continue;
+				}
+				$author = (int) $post->post_author;
+				if ( ! empty( $resolved['author__not_in'] ) ) {
+					$author_not_in = is_array( $resolved['author__not_in'] ) ? array_map( 'absint', $resolved['author__not_in'] ) : wp_parse_id_list( $resolved['author__not_in'] );
+					if ( in_array( $author, $author_not_in, true ) ) {
+						continue;
+					}
+				}
+				if ( ! empty( $resolved['author__in'] ) ) {
+					$author_in = is_array( $resolved['author__in'] ) ? array_map( 'absint', $resolved['author__in'] ) : wp_parse_id_list( $resolved['author__in'] );
+					if ( ! in_array( $author, $author_in, true ) ) {
+						continue;
+					}
+				}
+				$keep[] = $id;
+			}
+			$ids = $keep;
+		}
+		return array_values( $ids );
+	}
+
+	/**
+	 * Combine branch ID arrays by relation (AND, OR, UNION, UNION ALL).
+	 *
+	 * @param string $relation       AND | OR | UNION | UNION ALL.
+	 * @param array  $branch_results Array of arrays of post IDs.
+	 * @return array Combined post IDs.
+	 */
+	private static function combine_logic_ids( $relation, $branch_results ) {
+		$branch_results = array_filter( $branch_results, 'is_array' );
+		if ( empty( $branch_results ) ) {
+			return [];
+		}
+		if ( 'AND' === $relation ) {
+			$out = array_shift( $branch_results );
+			foreach ( $branch_results as $br ) {
+				$out = array_intersect( $out, $br );
+			}
+			return array_values( $out );
+		}
+		if ( 'OR' === $relation || 'UNION' === $relation ) {
+			$merged = [];
+			foreach ( $branch_results as $br ) {
+				$merged = array_merge( $merged, $br );
+			}
+			return array_values( array_unique( $merged ) );
+		}
+		if ( 'UNION ALL' === $relation ) {
+			$merged = [];
+			foreach ( $branch_results as $br ) {
+				$merged = array_merge( $merged, $br );
+			}
+			return array_values( $merged );
+		}
+		// Default: AND.
+		$out = array_shift( $branch_results );
+		foreach ( $branch_results as $br ) {
+			$out = array_intersect( $out, $br );
+		}
+		return array_values( $out );
 	}
 
 	/**
@@ -470,11 +712,8 @@ class QF_Query_Parser {
 
 		$operator = ! empty( $clause['operator'] ) ? strtoupper( sanitize_text_field( $clause['operator'] ) ) : '=';
 		
-		// Free version: only allow basic operators (=, !=, LIKE).
-		// Advanced operators (>, <, BETWEEN, IN, etc.) are PRO-only.
 		$allowed_operators = [ '=', '!=', 'LIKE' ];
 		if ( ! in_array( $operator, $allowed_operators, true ) ) {
-			// Fallback to '=' for disallowed operators in Free version.
 			$operator = '=';
 		}
 
@@ -529,74 +768,6 @@ class QF_Query_Parser {
 	}
 
 	/**
-	 * Extract standard field filters from filter structure
-	 *
-	 * @since 1.0.0
-	 * @param array $filters Filter structure.
-	 * @return array Standard field filters.
-	 */
-	private static function extract_standard_filters( $filters ) {
-		// Free version: enforce AND-only relation (OR is PRO-only).
-		$standard_filters = [
-			'relation' => 'AND',
-			'clauses'  => [],
-		];
-
-		if ( ! empty( $filters['clauses'] ) && is_array( $filters['clauses'] ) ) {
-			foreach ( $filters['clauses'] as $clause ) {
-				if ( ! is_array( $clause ) ) {
-					continue;
-				}
-
-				// Nested groups are PRO-only - skip them in Free version.
-				if ( isset( $clause['relation'] ) && ! empty( $clause['clauses'] ) ) {
-					continue;
-				}
-
-				if ( ! empty( $clause['field'] ) && self::is_standard_field( $clause['field'] ) ) {
-					$standard_filters['clauses'][] = $clause;
-				}
-			}
-		}
-
-		return $standard_filters;
-	}
-
-	/**
-	 * Extract meta field filters from filter structure
-	 *
-	 * @since 1.0.0
-	 * @param array $filters Filter structure.
-	 * @return array Meta field filters.
-	 */
-	private static function extract_meta_filters( $filters ) {
-		// Free version: enforce AND-only relation (OR is PRO-only).
-		$meta_filters = [
-			'relation' => 'AND',
-			'clauses'  => [],
-		];
-
-		if ( ! empty( $filters['clauses'] ) && is_array( $filters['clauses'] ) ) {
-			foreach ( $filters['clauses'] as $clause ) {
-				if ( ! is_array( $clause ) ) {
-					continue;
-				}
-
-				// Nested groups are PRO-only - skip them in Free version.
-				if ( isset( $clause['relation'] ) && ! empty( $clause['clauses'] ) ) {
-					continue;
-				}
-
-				if ( ! empty( $clause['field'] ) && ! self::is_standard_field( $clause['field'] ) ) {
-					$meta_filters['clauses'][] = $clause;
-				}
-			}
-		}
-
-		return $meta_filters;
-	}
-
-	/**
 	 * Apply standard field filters to WP_Query args
 	 *
 	 * @param array $args WP_Query arguments (passed by reference).
@@ -607,13 +778,12 @@ class QF_Query_Parser {
 			return;
 		}
 
-		// Initialize content filters array if needed.
-		if ( ! isset( $args['_qf_content_filters'] ) ) {
-			$args['_qf_content_filters'] = [];
+		// Unified where filters: title, content, excerpt (each adds AND condition; all combined with AND).
+		if ( ! isset( $args['_qf_where_filters'] ) ) {
+			$args['_qf_where_filters'] = [];
 		}
 
 		foreach ( $filters['clauses'] as $clause ) {
-			// Nested groups are PRO-only - skip them in Free version.
 			if ( isset( $clause['relation'] ) && ! empty( $clause['clauses'] ) ) {
 				continue;
 			}
@@ -628,22 +798,27 @@ class QF_Query_Parser {
 
 			switch ( $field ) {
 				case 'post_title':
-					// Use 's' parameter for search, or custom title filter.
-					if ( $operator === '=' || $operator === 'LIKE' ) {
-						$args['s'] = sanitize_text_field( $value );
-					}
+					// Route through _qf_where_filters so only post_title is searched (not s, which searches title OR excerpt OR content).
+					$args['_qf_where_filters'][] = [
+						'field'    => 'post_title',
+						'operator' => $operator,
+						'value'    => sanitize_text_field( $value ),
+					];
 					break;
 
 				case 'post_content':
-					// Don't use 's' parameter - it searches title, excerpt, AND content.
-					// Instead, we'll use a posts_where filter for exact content matching.
-					// Store the filter data to be processed by add_where_filters().
-					// We'll skip setting args['s'] here and handle it via where filter.
-					// Store in a temporary array that will be processed by add_where_filters.
-					if ( ! isset( $args['_qf_content_filters'] ) ) {
-						$args['_qf_content_filters'] = [];
-					}
-					$args['_qf_content_filters'][] = [
+					// Apply as AND on post_content only.
+					$args['_qf_where_filters'][] = [
+						'field'    => 'post_content',
+						'operator' => $operator,
+						'value'    => $value,
+					];
+					break;
+
+				case 'post_excerpt':
+					// Apply as AND on post_excerpt only.
+					$args['_qf_where_filters'][] = [
+						'field'    => 'post_excerpt',
 						'operator' => $operator,
 						'value'    => $value,
 					];
@@ -723,7 +898,6 @@ class QF_Query_Parser {
 	private static function build_tax_query( $filters ) {
 		$tax_query = [];
 
-		// Free version: enforce AND-only relation (OR is PRO-only).
 		$tax_query['relation'] = 'AND';
 
 		if ( ! empty( $filters['clauses'] ) && is_array( $filters['clauses'] ) ) {
@@ -849,70 +1023,73 @@ class QF_Query_Parser {
 	}
 
 	/**
-	 * Add where filters for post_content exact matching
+	 * Add where filters for post_title, post_content, post_excerpt (each AND'd).
 	 *
 	 * @since 1.0.0
-	 * @param array $content_filters Array of content filter definitions.
+	 * @param array $where_filters Array of filter definitions with 'field', 'operator', 'value'.
 	 */
-	private static function add_where_filters( $content_filters ) {
-		if ( empty( $content_filters ) || ! is_array( $content_filters ) ) {
+	private static function add_where_filters( $where_filters ) {
+		if ( empty( $where_filters ) || ! is_array( $where_filters ) ) {
 			return;
 		}
 
-		foreach ( $content_filters as $filter ) {
-			if ( empty( $filter['operator'] ) || empty( $filter['value'] ) ) {
+		$allowed_fields = [ 'post_title', 'post_content', 'post_excerpt' ];
+		foreach ( $where_filters as $filter ) {
+			if ( empty( $filter['operator'] ) || ! isset( $filter['value'] ) ) {
+				continue;
+			}
+			$field = isset( $filter['field'] ) ? $filter['field'] : 'post_content';
+			if ( ! in_array( $field, $allowed_fields, true ) ) {
 				continue;
 			}
 
-			// Create unique filter ID.
-			$filter_id = 'qf_where_' . md5( $filter['operator'] . $filter['value'] );
-
-			// Store filter data for the named method.
+			$filter_id = 'qf_where_' . md5( $field . $filter['operator'] . $filter['value'] );
 			self::$active_where_filters[ $filter_id ] = [
+				'field'    => $field,
 				'operator' => $filter['operator'],
 				'value'    => $filter['value'],
-				'priority' => 10,
 			];
 		}
 
-		// Add filter using named class method (only add once).
 		if ( ! empty( self::$active_where_filters ) && ! has_filter( 'posts_where', [ self::class, 'modify_where_sql' ] ) ) {
-			add_filter( 'posts_where', [ self::class, 'modify_where_sql' ], 10, 1 );
+			add_filter( 'posts_where', [ self::class, 'modify_where_sql' ], 10, 2 );
 		}
 	}
 
 	/**
-	 * Modify WHERE SQL for post_content exact matching
-	 * Named method so it can be removed properly.
+	 * Modify WHERE SQL for post_title, post_content, post_excerpt (each AND'd).
+	 * Only applies when the query is our get_query() run.
 	 *
 	 * @since 1.0.0
-	 * @param string $where_sql Current WHERE SQL.
+	 * @param string    $where_sql Current WHERE SQL.
+	 * @param \WP_Query $query     The WP_Query instance (optional).
 	 * @return string Modified WHERE SQL.
 	 */
-	public static function modify_where_sql( $where_sql ) {
+	public static function modify_where_sql( $where_sql, $query = null ) {
 		global $wpdb;
 
-		// Apply all active where filters.
+		if ( $query instanceof \WP_Query && ( self::$current_where_run_id === null || $query->get( '_qf_where_run_id' ) !== self::$current_where_run_id ) ) {
+			return $where_sql;
+		}
+
+		$column_whitelist = [ 'post_title' => 'post_title', 'post_content' => 'post_content', 'post_excerpt' => 'post_excerpt' ];
 		foreach ( self::$active_where_filters as $filter_data ) {
+			$field    = isset( $filter_data['field'] ) ? $filter_data['field'] : 'post_content';
 			$operator = strtoupper( sanitize_text_field( $filter_data['operator'] ) );
 			$value    = $filter_data['value'];
-
-			// Sanitize and escape the value for SQL.
-			$escaped_value = $wpdb->prepare( '%s', $value );
+			if ( ! isset( $column_whitelist[ $field ] ) ) {
+				continue;
+			}
+			$column = $column_whitelist[ $field ];
 
 			if ( '=' === $operator ) {
-				// For post_content, "=" means "contains" (LIKE), not exact match.
-				// This matches the old behavior where s parameter was used.
-				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.post_content LIKE %s", '%' . $wpdb->esc_like( $value ) . '%' );
+				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.{$column} = %s", $value );
 			} elseif ( 'LIKE' === $operator ) {
-				// LIKE match: post_content LIKE '%value%'
-				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.post_content LIKE %s", '%' . $wpdb->esc_like( $value ) . '%' );
+				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.{$column} LIKE %s", '%' . $wpdb->esc_like( $value ) . '%' );
 			} elseif ( '!=' === $operator || '<>' === $operator ) {
-				// Not equal: post_content != 'value'
-				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.post_content != %s", $value );
+				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.{$column} != %s", $value );
 			} elseif ( 'NOT LIKE' === $operator ) {
-				// NOT LIKE: post_content NOT LIKE '%value%'
-				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.post_content NOT LIKE %s", '%' . $wpdb->esc_like( $value ) . '%' );
+				$where_sql .= $wpdb->prepare( " AND {$wpdb->posts}.{$column} NOT LIKE %s", '%' . $wpdb->esc_like( $value ) . '%' );
 			}
 		}
 
@@ -928,8 +1105,9 @@ class QF_Query_Parser {
 		// Remove the filter using the named class method.
 		if ( ! empty( self::$active_where_filters ) ) {
 			remove_filter( 'posts_where', [ self::class, 'modify_where_sql' ], 10 );
-			// Clear active filters.
+			// Clear active filters and run id.
 			self::$active_where_filters = [];
+			self::$current_where_run_id = null;
 		}
 	}
 
@@ -1015,7 +1193,6 @@ class QF_Query_Parser {
 			return $value;
 		}
 
-		// Dynamic tags are PRO-only feature - Free version returns raw string without processing.
 		// Return the literal string including {{ tags }}.
 		return $value;
 	}

@@ -217,23 +217,6 @@ class Smart_Loop_Grid extends Widget_Base {
 				'default' => 'canned',
 				'options' => [
 					'canned' => __( 'Canned Styles', 'query-forge' ),
-					'template' => __( 'Custom Elementor Template', 'query-forge' ),
-				],
-			]
-		);
-
-		// Get available Elementor templates.
-		$templates = $this->get_elementor_templates();
-
-		$this->add_control(
-			'elementor_template_id',
-			[
-				'label'     => __( 'Select Template', 'query-forge' ),
-				'type'      => Controls_Manager::SELECT,
-				'options'   => $templates,
-				'default'   => '',
-				'condition' => [
-					'display_type' => 'template',
 				],
 			]
 		);
@@ -253,6 +236,493 @@ class Smart_Loop_Grid extends Widget_Base {
 				],
 				'condition' => [
 					'display_type' => 'canned',
+				],
+			]
+		);
+
+		$this->end_controls_section();
+
+		// Card Design Section (typography, colors, alignment, and button alignment).
+		$this->start_controls_section(
+			'section_card_design',
+			[
+				'label'     => __( 'Card Design', 'query-forge' ),
+				'tab'       => Controls_Manager::TAB_CONTENT,
+				'condition' => [
+					'display_type' => 'canned',
+				],
+			]
+		);
+
+		// Typography subgroup.
+		$this->add_control(
+			'card_design_typography_heading',
+			[
+				'label'     => __( 'Typography', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+			]
+		);
+
+		$this->add_control(
+			'card_title_typography_label',
+			[
+				'label'     => __( 'Title', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'condition' => [
+					'show_title' => 'yes',
+				],
+			]
+		);
+
+		$this->add_group_control(
+			\Elementor\Group_Control_Typography::get_type(),
+			[
+				'name'      => 'card_title_typography',
+				'selector'  => '{{WRAPPER}} .qf-card-title',
+				'condition' => [
+					'show_title' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_excerpt_typography_label',
+			[
+				'label'     => __( 'Excerpt', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'condition' => [
+					'show_excerpt' => 'yes',
+				],
+			]
+		);
+
+		$this->add_group_control(
+			\Elementor\Group_Control_Typography::get_type(),
+			[
+				'name'      => 'card_excerpt_typography',
+				'selector'  => '{{WRAPPER}} .qf-card-excerpt',
+				'condition' => [
+					'show_excerpt' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_meta_typography_label',
+			[
+				'label' => __( 'Meta', 'query-forge' ),
+				'type'  => Controls_Manager::HEADING,
+			]
+		);
+
+		$this->add_group_control(
+			\Elementor\Group_Control_Typography::get_type(),
+			[
+				'name'     => 'card_meta_typography',
+				'selector' => '{{WRAPPER}} .qf-card-meta',
+			]
+		);
+
+		$this->add_control(
+			'card_button_typography_label',
+			[
+				'label'     => __( 'Button', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'condition' => [
+					'show_read_more' => 'yes',
+				],
+			]
+		);
+
+		$this->add_group_control(
+			\Elementor\Group_Control_Typography::get_type(),
+			[
+				'name'      => 'card_button_typography',
+				'selector'  => '{{WRAPPER}} .qf-card-button',
+				'condition' => [
+					'show_read_more' => 'yes',
+				],
+			]
+		);
+
+		// Element Alignment subgroup.
+		$this->add_control(
+			'element_alignment_heading',
+			[
+				'label'     => __( 'Element Alignment', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'separator' => 'before',
+			]
+		);
+
+		$this->add_responsive_control(
+			'title_align',
+			[
+				'label'     => __( 'Title Align', 'query-forge' ),
+				'type'      => Controls_Manager::CHOOSE,
+				'options'   => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-title' => 'text-align: {{VALUE}};',
+				],
+				'condition' => [
+					'show_title' => 'yes',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'meta_align',
+			[
+				'label'   => __( 'Meta Align', 'query-forge' ),
+				'type'    => Controls_Manager::CHOOSE,
+				'options' => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-meta' => 'text-align: {{VALUE}};',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'excerpt_align',
+			[
+				'label'   => __( 'Excerpt Align', 'query-forge' ),
+				'type'    => Controls_Manager::CHOOSE,
+				'options' => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-excerpt' => 'text-align: {{VALUE}};',
+				],
+				'condition' => [
+					'show_excerpt' => 'yes',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'button_align',
+			[
+				'label'   => __( 'Button Align', 'query-forge' ),
+				'type'    => Controls_Manager::CHOOSE,
+				'options' => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-button-wrapper' => 'text-align: {{VALUE}};',
+				],
+				'condition' => [
+					'show_read_more' => 'yes',
+				],
+			]
+		);
+
+		// Colors subgroup.
+		$this->add_control(
+			'card_design_colors_heading',
+			[
+				'label'     => __( 'Colors', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'separator' => 'before',
+			]
+		);
+
+		$this->add_control(
+			'card_background_color',
+			[
+				'label'     => __( 'Card Background', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-card' => 'background-color: {{VALUE}};',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_title_color',
+			[
+				'label'     => __( 'Title', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-title, {{WRAPPER}} .qf-card-title a' => 'color: {{VALUE}};',
+				],
+				'condition' => [
+					'show_title' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_meta_color',
+			[
+				'label'     => __( 'Meta', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-meta, {{WRAPPER}} .qf-card-meta a' => 'color: {{VALUE}};',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_excerpt_color',
+			[
+				'label'     => __( 'Excerpt', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-excerpt' => 'color: {{VALUE}};',
+				],
+				'condition' => [
+					'show_excerpt' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_button_color',
+			[
+				'label'     => __( 'Button', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-button' => 'background-color: {{VALUE}};',
+				],
+				'condition' => [
+					'show_read_more' => 'yes',
+				],
+			]
+		);
+
+		// Layout & Style subgroup.
+		$this->add_control(
+			'card_design_layout_heading',
+			[
+				'label'     => __( 'Layout & Style', 'query-forge' ),
+				'type'      => Controls_Manager::HEADING,
+				'separator' => 'before',
+			]
+		);
+
+		$this->add_responsive_control(
+			'card_content_alignment',
+			[
+				'label'   => __( 'Alignment', 'query-forge' ),
+				'type'    => Controls_Manager::CHOOSE,
+				'options' => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-content' => 'text-align: {{VALUE}};',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_image_ratio',
+			[
+				'label'   => __( 'Image Ratio', 'query-forge' ),
+				'type'    => Controls_Manager::SELECT,
+				'default' => '16/9',
+				'options' => [
+					'16/9' => '16:9',
+					'4/3'  => '4:3',
+					'1/1'  => '1:1',
+				],
+				'selectors' => [
+					'{{WRAPPER}} .qf-card-image img' => 'aspect-ratio: {{VALUE}}; object-fit: cover;',
+				],
+				'condition' => [
+					'show_image' => 'yes',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'card_border_radius',
+			[
+				'label'      => __( 'Border Radius', 'query-forge' ),
+				'type'       => Controls_Manager::SLIDER,
+				'size_units' => [ 'px' ],
+				'range'      => [
+					'px' => [
+						'min' => 0,
+						'max' => 40,
+					],
+				],
+				'selectors'  => [
+					'{{WRAPPER}} .qf-card' => 'border-radius: {{SIZE}}{{UNIT}};',
+				],
+			]
+		);
+
+		$this->add_control(
+			'card_shadow',
+			[
+				'label'   => __( 'Card Shadow', 'query-forge' ),
+				'type'    => Controls_Manager::SELECT,
+				'default' => 'soft',
+				'options' => [
+					'none'  => __( 'None', 'query-forge' ),
+					'soft'  => __( 'Soft', 'query-forge' ),
+					'strong'=> __( 'Strong', 'query-forge' ),
+				],
+				'selectors' => [
+					'{{WRAPPER}} .qf-card' => 'box-shadow: {{VALUE}};',
+				],
+			]
+		);
+
+		$this->end_controls_section();
+
+		// Results Summary Section.
+		$this->start_controls_section(
+			'section_results_summary',
+			[
+				'label'     => __( 'Results Summary', 'query-forge' ),
+				'tab'       => Controls_Manager::TAB_CONTENT,
+				'condition' => [
+					'display_type' => 'canned',
+				],
+			]
+		);
+
+		$this->add_control(
+			'show_results_summary',
+			[
+				'label'   => __( 'Show Results Summary', 'query-forge' ),
+				'type'    => Controls_Manager::SWITCHER,
+				'default' => '',
+			]
+		);
+
+		$this->add_control(
+			'results_summary_position',
+			[
+				'label'     => __( 'Position', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'above_grid',
+				'options'   => [
+					'above_grid'       => __( 'Above Grid', 'query-forge' ),
+					'above_pagination' => __( 'Above Pagination', 'query-forge' ),
+					'below_pagination' => __( 'Below Pagination', 'query-forge' ),
+				],
+				'condition' => [
+					'show_results_summary' => 'yes',
+				],
+			]
+		);
+
+		$this->add_group_control(
+			\Elementor\Group_Control_Typography::get_type(),
+			[
+				'name'      => 'results_summary_typography',
+				'selector'  => '{{WRAPPER}} .qf-results-summary',
+				'condition' => [
+					'show_results_summary' => 'yes',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'results_summary_color',
+			[
+				'label'     => __( 'Text Color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'selectors' => [
+					'{{WRAPPER}} .qf-results-summary' => 'color: {{VALUE}};',
+				],
+				'condition' => [
+					'show_results_summary' => 'yes',
+				],
+			]
+		);
+
+		$this->add_responsive_control(
+			'results_summary_align',
+			[
+				'label'     => __( 'Alignment', 'query-forge' ),
+				'type'      => Controls_Manager::CHOOSE,
+				'options'   => [
+					'left'   => [
+						'title' => __( 'Left', 'query-forge' ),
+						'icon'  => 'eicon-text-align-left',
+					],
+					'center' => [
+						'title' => __( 'Center', 'query-forge' ),
+						'icon'  => 'eicon-text-align-center',
+					],
+					'right'  => [
+						'title' => __( 'Right', 'query-forge' ),
+						'icon'  => 'eicon-text-align-right',
+					],
+				],
+				'default'   => '',
+				'selectors' => [
+					'{{WRAPPER}} .qf-results-summary' => 'text-align: {{VALUE}};',
+				],
+				'condition' => [
+					'show_results_summary' => 'yes',
 				],
 			]
 		);
@@ -300,6 +770,31 @@ class Smart_Loop_Grid extends Widget_Base {
 				'step'      => 10,
 				'condition' => [
 					'show_excerpt' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'show_read_more',
+			[
+				'label'   => __( 'Show Read More Button', 'query-forge' ),
+				'type'    => Controls_Manager::SWITCHER,
+				'default' => '',
+			]
+		);
+
+		$this->add_control(
+			'card_button_position',
+			[
+				'label'     => __( 'Button Position', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'bottom',
+				'options'   => [
+					'top'    => __( 'Top', 'query-forge' ),
+					'bottom' => __( 'Bottom', 'query-forge' ),
+				],
+				'condition' => [
+					'show_read_more' => 'yes',
 				],
 			]
 		);
@@ -382,8 +877,6 @@ class Smart_Loop_Grid extends Widget_Base {
 			]
 		);
 
-		// Free version: Only Standard pagination is available.
-		// Advanced pagination types (AJAX, Load More, Infinite Scroll) are PRO-only features.
 		$pagination_options = [
 			'standard' => __( 'Standard (Page Numbers)', 'query-forge' ),
 		];
@@ -401,7 +894,6 @@ class Smart_Loop_Grid extends Widget_Base {
 			]
 		);
 		
-		// Show hint for Pro features (AJAX, Load More, Infinite Scroll are PRO-only)
 		$this->add_control(
 			'pagination_pro_hint',
 			[
@@ -418,7 +910,6 @@ class Smart_Loop_Grid extends Widget_Base {
 			]
 		);
 
-		// Previous/Next Text for Standard pagination only (AJAX is PRO-only)
 		$prev_next_condition = [ 'standard' ];
 		
 		$this->add_control(
@@ -571,42 +1062,6 @@ class Smart_Loop_Grid extends Widget_Base {
 	}
 
 	/**
-	 * Get available Elementor templates
-	 *
-	 * @return array Template options.
-	 */
-	private function get_elementor_templates() {
-		$templates = [
-			'' => __( '— Select Template —', 'query-forge' ),
-		];
-
-		// Get Elementor templates - include all template types that can be used as cards.
-		$template_types = [ 'section', 'page', 'widget' ];
-
-		$template_posts = get_posts(
-			[
-				'post_type'      => 'elementor_library',
-				'posts_per_page' => -1,
-				'post_status'    => 'publish',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Required to filter Elementor templates by type.
-				'meta_query'     => [
-					[
-						'key'     => '_elementor_template_type',
-						'value'   => $template_types,
-						'compare' => 'IN',
-					],
-				],
-			]
-		);
-
-		foreach ( $template_posts as $template_post ) {
-			$templates[ $template_post->ID ] = $template_post->post_title;
-		}
-
-		return $templates;
-	}
-
-	/**
 	 * Render widget output
 	 */
 	protected function render() {
@@ -660,7 +1115,15 @@ class Smart_Loop_Grid extends Widget_Base {
 			return;
 		}
 
-		$display_type = ! empty( $settings['display_type'] ) ? $settings['display_type'] : 'canned';
+		$display_type = 'canned';
+
+		$show_results_summary = ! empty( $settings['show_results_summary'] ) && 'yes' === $settings['show_results_summary'];
+		$results_position     = ! empty( $settings['results_summary_position'] ) ? $settings['results_summary_position'] : 'above_grid';
+
+		// Render results summary above grid, if configured.
+		if ( $show_results_summary && 'above_grid' === $results_position ) {
+			$this->render_results_summary( $query );
+		}
 
 		// Render grid.
 		if ( 'template' === $display_type && ! empty( $settings['elementor_template_id'] ) ) {
@@ -683,6 +1146,10 @@ class Smart_Loop_Grid extends Widget_Base {
 		}
 
 		// Pagination.
+		if ( $show_results_summary && 'above_pagination' === $results_position ) {
+			$this->render_results_summary( $query );
+		}
+
 		$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
 		if ( ! empty( $settings['show_pagination'] ) && 'yes' === $settings['show_pagination'] ) {
 			if ( 'standard' === $pagination_type || 'ajax' === $pagination_type ) {
@@ -693,6 +1160,49 @@ class Smart_Loop_Grid extends Widget_Base {
 				$this->render_infinite_scroll_trigger( $query, $settings );
 			}
 		}
+
+		if ( $show_results_summary && 'below_pagination' === $results_position ) {
+			$this->render_results_summary( $query );
+		}
+	}
+
+	/**
+	 * Render results summary.
+	 *
+	 * @param \WP_Query $query Query object.
+	 */
+	private function render_results_summary( $query ) {
+		if ( ! $query || ! $query->have_posts() ) {
+			return;
+		}
+
+		$total   = (int) $query->found_posts;
+		$per_page = (int) $query->get( 'posts_per_page' );
+		if ( $per_page <= 0 ) {
+			$per_page = $total;
+		}
+
+		$paged = (int) $query->get( 'paged' );
+		if ( $paged < 1 ) {
+			$paged = 1;
+		}
+
+		$start = ( ( $paged - 1 ) * $per_page ) + 1;
+		$end   = min( $paged * $per_page, $total );
+
+		if ( $total <= 0 || $start > $end ) {
+			return;
+		}
+
+		/* translators: 1: first result number, 2: last result number, 3: total results. */
+		$text = sprintf(
+			esc_html__( 'Showing %1$d–%2$d of %3$d results', 'query-forge' ),
+			$start,
+			$end,
+			$total
+		);
+
+		echo '<div class="qf-results-summary">' . esc_html( $text ) . '</div>';
 	}
 
 	/**
@@ -766,28 +1276,30 @@ class Smart_Loop_Grid extends Widget_Base {
 		$show_author  = ! empty( $settings['show_author'] ) && 'yes' === $settings['show_author'];
 		$show_image   = ! empty( $settings['show_image'] ) && 'yes' === $settings['show_image'];
 		$link_target  = ! empty( $settings['link_target'] ) ? $settings['link_target'] : '_self';
+		$show_button  = ! empty( $settings['show_read_more'] ) && 'yes' === $settings['show_read_more'];
+		$button_position = ! empty( $settings['card_button_position'] ) ? $settings['card_button_position'] : 'bottom';
 
 		?>
 		<div class="qf-card qf-card-<?php echo esc_attr( $style ); ?>">
 			<?php
 			switch ( $style ) {
 				case 'horizontal':
-					$this->render_horizontal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_horizontal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 					break;
 				case 'vertical':
-					$this->render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 					break;
 				case 'minimal':
-					$this->render_minimal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_minimal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 					break;
 				case 'grid':
-					$this->render_grid_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_grid_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 					break;
 				case 'magazine':
-					$this->render_magazine_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_magazine_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 					break;
 				default:
-					$this->render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target );
+					$this->render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position );
 			}
 			?>
 		</div>
@@ -797,7 +1309,7 @@ class Smart_Loop_Grid extends Widget_Base {
 	/**
 	 * Render horizontal card (image left, content right)
 	 */
-	private function render_horizontal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target ) {
+	private function render_horizontal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position ) {
 		?>
 		<div class="qf-card-inner qf-card-horizontal">
 			<?php if ( $show_image ) : ?>
@@ -807,6 +1319,9 @@ class Smart_Loop_Grid extends Widget_Base {
 			<?php endif; ?>
 			<div class="qf-card-content">
 				<?php
+				if ( $show_button && 'top' === $button_position ) {
+					$this->render_read_more_button( $link_target );
+				}
 				if ( $show_title ) {
 					$this->render_title( $link_target );
 				}
@@ -815,6 +1330,9 @@ class Smart_Loop_Grid extends Widget_Base {
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
+				}
+				if ( $show_button && 'bottom' === $button_position ) {
+					$this->render_read_more_button( $link_target );
 				}
 				?>
 			</div>
@@ -825,7 +1343,7 @@ class Smart_Loop_Grid extends Widget_Base {
 	/**
 	 * Render vertical card (image top, content below)
 	 */
-	private function render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target ) {
+	private function render_vertical_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position ) {
 		?>
 		<div class="qf-card-inner qf-card-vertical">
 			<?php if ( $show_image ) : ?>
@@ -835,6 +1353,9 @@ class Smart_Loop_Grid extends Widget_Base {
 			<?php endif; ?>
 			<div class="qf-card-content">
 				<?php
+				if ( $show_button && 'top' === $button_position ) {
+					$this->render_read_more_button( $link_target );
+				}
 				if ( $show_title ) {
 					$this->render_title( $link_target );
 				}
@@ -843,6 +1364,9 @@ class Smart_Loop_Grid extends Widget_Base {
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
+				}
+				if ( $show_button && 'bottom' === $button_position ) {
+					$this->render_read_more_button( $link_target );
 				}
 				?>
 			</div>
@@ -853,11 +1377,14 @@ class Smart_Loop_Grid extends Widget_Base {
 	/**
 	 * Render minimal list card (no image, text only)
 	 */
-	private function render_minimal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target ) {
+	private function render_minimal_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position ) {
 		?>
 		<div class="qf-card-inner qf-card-minimal">
 			<div class="qf-card-content">
 				<?php
+				if ( $show_button && 'top' === $button_position ) {
+					$this->render_read_more_button( $link_target );
+				}
 				if ( $show_title ) {
 					$this->render_title( $link_target );
 				}
@@ -866,6 +1393,9 @@ class Smart_Loop_Grid extends Widget_Base {
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
+				}
+				if ( $show_button && 'bottom' === $button_position ) {
+					$this->render_read_more_button( $link_target );
 				}
 				?>
 			</div>
@@ -876,7 +1406,7 @@ class Smart_Loop_Grid extends Widget_Base {
 	/**
 	 * Render grid card (square image, compact content)
 	 */
-	private function render_grid_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target ) {
+	private function render_grid_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position ) {
 		?>
 		<div class="qf-card-inner qf-card-grid">
 			<?php if ( $show_image ) : ?>
@@ -886,11 +1416,17 @@ class Smart_Loop_Grid extends Widget_Base {
 			<?php endif; ?>
 			<div class="qf-card-content">
 				<?php
+				if ( $show_button && 'top' === $button_position ) {
+					$this->render_read_more_button( $link_target );
+				}
 				if ( $show_title ) {
 					$this->render_title( $link_target );
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
+				}
+				if ( $show_button && 'bottom' === $button_position ) {
+					$this->render_read_more_button( $link_target );
 				}
 				?>
 			</div>
@@ -901,7 +1437,7 @@ class Smart_Loop_Grid extends Widget_Base {
 	/**
 	 * Render magazine style card (large image with overlay)
 	 */
-	private function render_magazine_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target ) {
+	private function render_magazine_card( $settings, $show_title, $show_excerpt, $show_date, $show_author, $show_image, $link_target, $show_button, $button_position ) {
 		?>
 		<div class="qf-card-inner qf-card-magazine">
 			<?php if ( $show_image ) : ?>
@@ -916,6 +1452,9 @@ class Smart_Loop_Grid extends Widget_Base {
 			<?php endif; ?>
 			<div class="qf-card-content">
 				<?php
+				if ( $show_button && 'top' === $button_position ) {
+					$this->render_read_more_button( $link_target );
+				}
 				if ( ! $show_image && $show_title ) {
 					$this->render_title( $link_target );
 				}
@@ -924,6 +1463,9 @@ class Smart_Loop_Grid extends Widget_Base {
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
+				}
+				if ( $show_button && 'bottom' === $button_position ) {
+					$this->render_read_more_button( $link_target );
 				}
 				?>
 			</div>
@@ -995,6 +1537,21 @@ class Smart_Loop_Grid extends Widget_Base {
 									</a>
 								</span>
 			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render read more button
+	 *
+	 * @param string $link_target Link target.
+	 */
+	private function render_read_more_button( $link_target ) {
+		?>
+		<div class="qf-card-button-wrapper">
+			<a href="<?php echo esc_url( get_permalink() ); ?>" target="<?php echo esc_attr( $link_target ); ?>" class="qf-card-button">
+				<?php echo esc_html__( 'Read More', 'query-forge' ); ?>
+			</a>
 		</div>
 		<?php
 	}

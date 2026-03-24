@@ -5,7 +5,7 @@ Tags: elementor, query builder, posts, custom post types, visual builder
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,12 +20,13 @@ Query Forge is a powerful visual query builder for Elementor that lets you creat
 * Visual Node-Based Interface - Drag and drop nodes to build queries visually
 * Post Type Support - Query Posts, Pages, and all Custom Post Types
 * Taxonomy Filtering - Filter by categories, tags, and custom taxonomies
-* Basic Meta Filtering - Filter by custom fields with operators (=, !=, LIKE)
+* Basic Meta Filtering - Filter by custom fields with operators (=, !=, LIKE, NOT LIKE)
 * Flexible Sorting - Sort by Date, Title, or ID
 * Include/Exclude Posts - Fine-tune which posts appear in your results
 * AND Logic - Combine multiple filters with AND logic
 * Standard Pagination - Built-in pagination support
 * Save & Import Queries - Save your query configurations for reuse
+* Card Design Controls - Typography, colors, alignment, image ratio, border radius and shadow — no CSS required
 * Elementor Integration - Seamlessly integrates with Elementor widgets and templates
 
 = Perfect For =
@@ -41,12 +42,14 @@ Query Forge is a powerful visual query builder for Elementor that lets you creat
 Free Version Includes:
 
 * One source node per query (Posts, Pages, all CPTs)
-* Basic meta filters (single key, =, !=, LIKE operators)
+* Basic meta filters (single key, =, !=, LIKE, NOT LIKE operators)
 * Taxonomy filters
 * AND-only logic
 * Basic sorting (Date, Title, ID)
 * Standard pagination
 * Static literal values only
+* 5 Canned Templates
+* Card Design Controls
 
 Pro Version Unlocks:
 
@@ -60,6 +63,9 @@ Pro Version Unlocks:
 * AJAX pagination, Load More, and Infinite Scroll
 * Related content logic
 * Context-aware behavior
+* Custom User Templates from Elementor.
+* Preview Node — see live query results on the canvas as you build, before saving; click any post ID to copy it instantly
+* Source Preview — browse and search raw source content inline on any Source node; copy post IDs directly for use in Include/Exclude
 
 [Upgrade to Pro →](https://queryforgeplugin.com)
 
@@ -144,6 +150,14 @@ No, Query Forge is specifically designed for Elementor and requires Elementor to
 
 Yes, Query Forge is translation-ready and includes a .pot file for translators.
 
+= Are there built in layouts that I can use ? =
+
+Yes, Query Forge and Query Forge Pro both have built in layouts/card designs that with user controls. However, the PRO version gives you access to elementor's full loop engine if you have the pro version of Elementor Pro.
+
+= Can I see my queries BEFORE I save them ? =
+
+Yes! But only with the PRO version. 
+
 == Screenshots ==
 
 1. Visual node-based query builder interface
@@ -153,6 +167,25 @@ Yes, Query Forge is translation-ready and includes a .pot file for translators.
 5. Query results displayed in Elementor
 
 == Changelog ==
+
+= 1.2.0 =
+* Added post IDs to Preview node results — each result now shows the post ID to the left of the title; click any ID to copy it to the clipboard with a visual confirmation flash
+* Added Search to Preview node — toggle inline search to filter results by title on demand
+* Added Source Preview (Pro) — enable on any post-type Source node to browse and search its raw content inline on the canvas; paginate through results and copy post IDs for use in Include/Exclude
+
+= 1.1.0 =
+* Added Preview node (Pro) — place a Preview node on the canvas to see live post titles and total result count as you build; updates automatically on canvas changes without saving or reloading
+* Added NOT LIKE operator to filter conditions for all fields
+* Added UNION and UNION ALL relations to the Logic node — cycle through all four relations (AND, OR, UNION, UNION ALL) by clicking the node label on the canvas
+* Added Card Design section — control typography, per-element alignment, colors, image ratio, border radius, and card shadow for canned card styles directly in the widget panel, no CSS required
+* Added Read More button to canned card styles — toggle on/off with configurable position (top or bottom of card content)
+* Fixed: canvas with no complete path from Source to Target now correctly returns no results instead of returning all posts
+* Fixed: filtering by post title now searches title only, not title and excerpt together
+* Fixed: filtering by post content and post excerpt now work as independent conditions
+* Fixed: disconnected nodes (not on a complete path to Target) are now visually dimmed on the canvas so you can immediately see what is and isn't part of your active query
+* Fixed: custom Elementor template display type is now correctly restricted to Pro — Free version uses canned card styles only
+* Improved: Logic node now shows all relation options with descriptions in the settings panel
+* Improved: query execution model rebuilt for more reliable results across complex multi-filter canvases
 
 = 1.0.0 =
 * Initial release
@@ -166,7 +199,7 @@ Yes, Query Forge is translation-ready and includes a .pot file for translators.
 
 For support, feature requests, and documentation, please visit:
 * Query Forge Website: https://queryforgeplugin.com
-* Support Forum: https://queryforgeplugin.com/support
+* Documentation: https://queryforgeplugin.com/documentation.html
 
 == Credits ==
 

@@ -1,0 +1,479 @@
+# Copyright (C) 2026 Query Forge Development
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Query Forge 1.1.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/Query-Forge-Free\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-03-18T23:43:19+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: query-forge\n"
+
+#. Plugin Name of the plugin
+#: query-forge.php
+#: includes/class-qf-plugin.php:104
+#: widgets/class-smart-loop-grid.php:46
+msgid "Query Forge"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: query-forge.php
+msgid "https://github.com/queryforgeplugin/Query-Forge"
+msgstr ""
+
+#. Description of the plugin
+#: query-forge.php
+msgid "Visual Node-Based Logic Engine for Elementor with React Flow interface."
+msgstr ""
+
+#. Author of the plugin
+#: query-forge.php
+msgid "Query Forge Development"
+msgstr ""
+
+#. Author URI of the plugin
+#: query-forge.php
+msgid "https://queryforgeplugin.com"
+msgstr ""
+
+#: includes/class-qf-plugin.php:267
+#: includes/class-qf-plugin.php:384
+#: includes/class-qf-plugin.php:480
+#: includes/class-qf-plugin.php:520
+msgid "Permission denied."
+msgstr ""
+
+#: includes/class-qf-plugin.php:277
+#: widgets/class-smart-loop-grid.php:269
+#: widgets/class-smart-loop-grid.php:495
+#: widgets/class-smart-loop-grid.php:958
+msgid "Title"
+msgstr ""
+
+#: includes/class-qf-plugin.php:282
+msgid "Date"
+msgstr ""
+
+#: includes/class-qf-plugin.php:287
+msgid "Author"
+msgstr ""
+
+#: includes/class-qf-plugin.php:292
+msgid "Content"
+msgstr ""
+
+#: includes/class-qf-plugin.php:297
+#: widgets/class-smart-loop-grid.php:291
+#: widgets/class-smart-loop-grid.php:520
+#: widgets/class-smart-loop-grid.php:981
+msgid "Excerpt"
+msgstr ""
+
+#: includes/class-qf-plugin.php:399
+#: includes/class-qf-plugin.php:571
+#: includes/class-qf-plugin.php:578
+msgid "Invalid query data."
+msgstr ""
+
+#: includes/class-qf-plugin.php:441
+msgid "Query name is required."
+msgstr ""
+
+#: includes/class-qf-plugin.php:464
+msgid "Query saved successfully."
+msgstr ""
+
+#: includes/class-qf-plugin.php:466
+msgid "Failed to save query."
+msgstr ""
+
+#: includes/class-qf-plugin.php:527
+#: includes/class-qf-plugin.php:533
+msgid "Invalid query ID."
+msgstr ""
+
+#: includes/class-qf-plugin.php:547
+msgid "Query deleted successfully."
+msgstr ""
+
+#: includes/class-qf-plugin.php:598
+msgid "No more posts found."
+msgstr ""
+
+#: includes/class-qf-plugin.php:656
+#: widgets/class-smart-loop-grid.php:920
+#: widgets/class-smart-loop-grid.php:1617
+msgid "&laquo; Previous"
+msgstr ""
+
+#: includes/class-qf-plugin.php:657
+#: widgets/class-smart-loop-grid.php:933
+#: widgets/class-smart-loop-grid.php:1618
+msgid "Next &raquo;"
+msgstr ""
+
+#: query-forge.php:57
+msgid "Query Forge requires Elementor to be installed and activated."
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:79
+msgid "Query Builder"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:88
+msgid "Open Visual Logic Builder"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:89
+msgid "⚡ Open Builder"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:103
+msgid "Explore Pro features →"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:134
+msgid "Layout"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:142
+msgid "Columns"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:164
+msgid "Column Gap"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:184
+msgid "Row Gap"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:207
+#: widgets/class-smart-loop-grid.php:227
+msgid "Card Style"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:215
+msgid "Display Type"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:219
+msgid "Canned Styles"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:231
+msgid "Horizontal Card"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:232
+msgid "Vertical Card"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:233
+msgid "Minimal List"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:234
+msgid "Grid Card"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:235
+msgid "Magazine Style"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:249
+msgid "Card Design"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:261
+#: widgets/class-smart-loop-grid.php:947
+msgid "Typography"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:313
+#: widgets/class-smart-loop-grid.php:509
+msgid "Meta"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:329
+#: widgets/class-smart-loop-grid.php:534
+msgid "Button"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:352
+msgid "Element Alignment"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:361
+msgid "Title Align"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:365
+#: widgets/class-smart-loop-grid.php:394
+#: widgets/class-smart-loop-grid.php:420
+#: widgets/class-smart-loop-grid.php:449
+#: widgets/class-smart-loop-grid.php:562
+#: widgets/class-smart-loop-grid.php:708
+msgid "Left"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:369
+#: widgets/class-smart-loop-grid.php:398
+#: widgets/class-smart-loop-grid.php:424
+#: widgets/class-smart-loop-grid.php:453
+#: widgets/class-smart-loop-grid.php:566
+#: widgets/class-smart-loop-grid.php:712
+msgid "Center"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:373
+#: widgets/class-smart-loop-grid.php:402
+#: widgets/class-smart-loop-grid.php:428
+#: widgets/class-smart-loop-grid.php:457
+#: widgets/class-smart-loop-grid.php:570
+#: widgets/class-smart-loop-grid.php:716
+msgid "Right"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:390
+msgid "Meta Align"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:416
+msgid "Excerpt Align"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:445
+msgid "Button Align"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:475
+msgid "Colors"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:484
+msgid "Card Background"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:549
+msgid "Layout & Style"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:558
+#: widgets/class-smart-loop-grid.php:704
+msgid "Alignment"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:584
+msgid "Image Ratio"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:604
+msgid "Border Radius"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:622
+msgid "Card Shadow"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:626
+msgid "None"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:627
+msgid "Soft"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:628
+msgid "Strong"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:642
+msgid "Results Summary"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:653
+msgid "Show Results Summary"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:662
+msgid "Position"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:666
+msgid "Above Grid"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:667
+msgid "Above Pagination"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:668
+msgid "Below Pagination"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:690
+msgid "Text Color"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:736
+msgid "Content Fields"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:747
+msgid "Show Title"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:756
+msgid "Show Excerpt"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:765
+msgid "Excerpt Length"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:780
+msgid "Show Read More Button"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:789
+msgid "Button Position"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:793
+msgid "Top"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:794
+msgid "Bottom"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:805
+msgid "Show Date"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:814
+msgid "Show Author"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:823
+msgid "Show Featured Image"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:832
+msgid "Image Size"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:836
+msgid "Thumbnail"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:837
+msgid "Medium"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:838
+msgid "Large"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:839
+msgid "Full"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:850
+msgid "Link Target"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:854
+msgid "Same Window"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:855
+msgid "New Window"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:866
+msgid "Pagination"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:874
+msgid "Show Pagination"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:881
+msgid "Standard (Page Numbers)"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:887
+msgid "Pagination Type"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:903
+msgid "AJAX, Load More, and Infinite Scroll available in"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:905
+msgid "Pro"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:918
+msgid "Previous Text"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:931
+msgid "Next Text"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1004
+msgid "Date & Author"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1024
+msgid "Spacing"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1035
+msgid "Card Padding"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1047
+msgid "Content Spacing"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1099
+msgid "Please configure Query Builder to display posts."
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1112
+msgid "No posts found. Check your query settings."
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1199
+#, php-format
+msgid "Showing %1$d–%2$d of %3$d results"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1221
+msgid "Please select an Elementor template."
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1232
+msgid "Selected template not found."
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1553
+msgid "Read More"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1655
+msgid "Load More"
+msgstr ""
+
+#: widgets/class-smart-loop-grid.php:1656
+msgid "Loading..."
+msgstr ""

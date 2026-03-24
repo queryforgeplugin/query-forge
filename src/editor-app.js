@@ -114,9 +114,8 @@ function attachButtonListener() {
     if (widgetModel && widgetModel.get('widgetType') === 'qf_smart_loop_grid') {
       mountReactModal(widgetModel);
     } else {
-      console.warn('Query Forge: Could not find widget model. Current widget:', widgetModel ? widgetModel.get('widgetType') : 'none');
       alert('Error: Could not find Query Forge widget. Please click on the Query Forge widget in the editor, then try again.');
-      }
+    }
     });
 }
 

@@ -9,6 +9,7 @@ const InclusionExclusionNode = ({ data, selected, id, onDelete }) => {
     }
   };
 
+  const unconnected = data?.unconnected === true;
   return (
     <div
       style={{
@@ -17,9 +18,11 @@ const InclusionExclusionNode = ({ data, selected, id, onDelete }) => {
         color: '#fff',
         borderRadius: '8px',
         minWidth: '150px',
-        border: selected ? '2px solid #fff' : '2px solid transparent',
+        border: selected ? '2px solid #fff' : unconnected ? '1px dashed #718096' : '2px solid transparent',
+        opacity: unconnected ? 0.7 : 1,
         position: 'relative',
       }}
+      title={unconnected ? 'Not connected to output' : undefined}
     >
       {onDelete && (
         <button
