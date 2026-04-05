@@ -88,7 +88,7 @@ class QF_Block {
 		echo '<div ' . get_block_wrapper_attributes() . '>';
 		$this->maybe_enqueue_google_fonts( $attributes );
 		$this->output_scoped_grid_css( $attributes );
-		$this->render_main( $attributes, $settings, $is_editor_preview );
+		$this->render_main( $attributes, $settings );
 		echo '</div>';
 		return ob_get_clean();
 	}
@@ -562,6 +562,7 @@ class QF_Block {
 			'show_read_more'           => $attributes['showReadMore'] ?? 'yes',
 			'link_target'              => $attributes['linkTarget'] ?? '_self',
 			'card_button_position'     => $attributes['cardButtonPosition'] ?? 'bottom',
+			'title_link_decoration'    => ( isset( $attributes['titleLinkDecoration'] ) && 'underline' === $attributes['titleLinkDecoration'] ) ? 'underline' : 'none',
 		];
 	}
 
@@ -570,9 +571,8 @@ class QF_Block {
 	 *
 	 * @param array $attributes Raw block attributes (for data-qf-settings JSON).
 	 * @param array $settings   Legacy-shaped settings for helpers.
-	 * @param bool  $is_editor_preview True when rendering for ServerSideRender (REST).
 	 */
-	private function render_main( array $attributes, array $settings, bool $is_editor_preview = false ): void {
+	private function render_main( array $attributes, array $settings ): void {
 		$data_settings = wp_json_encode(
 			[
 				'logic_json'      => $attributes['logicJson'] ?? '',
@@ -656,17 +656,14 @@ class QF_Block {
 			$this->render_results_summary( $query, $attributes );
 		}
 
-		// Suppress pagination in editor preview (ServerSideRender); first page only in canvas.
-		if ( ! $is_editor_preview ) {
-			$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
-			if ( ! empty( $settings['show_pagination'] ) && 'yes' === $settings['show_pagination'] ) {
-				if ( 'standard' === $pagination_type || 'ajax' === $pagination_type ) {
-					$this->render_pagination( $query, $settings );
-				} elseif ( 'load_more' === $pagination_type ) {
-					$this->render_load_more_button( $query, $settings );
-				} elseif ( 'infinite_scroll' === $pagination_type ) {
-					$this->render_infinite_scroll_trigger( $query, $settings );
-				}
+		$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
+		if ( ! empty( $settings['show_pagination'] ) && 'yes' === $settings['show_pagination'] ) {
+			if ( 'standard' === $pagination_type || 'ajax' === $pagination_type ) {
+				$this->render_pagination( $query, $settings );
+			} elseif ( 'load_more' === $pagination_type ) {
+				$this->render_load_more_button( $query, $settings );
+			} elseif ( 'infinite_scroll' === $pagination_type ) {
+				$this->render_infinite_scroll_trigger( $query, $settings );
 			}
 		}
 
@@ -778,7 +775,7 @@ class QF_Block {
 					$this->render_read_more_button( $link_target );
 				}
 				if ( $show_title ) {
-					$this->render_title( $link_target );
+					$this->render_title( $link_target, $settings );
 				}
 				if ( $show_excerpt ) {
 					$this->render_excerpt( $settings );
@@ -814,7 +811,7 @@ class QF_Block {
 					$this->render_read_more_button( $link_target );
 				}
 				if ( $show_title ) {
-					$this->render_title( $link_target );
+					$this->render_title( $link_target, $settings );
 				}
 				if ( $show_excerpt ) {
 					$this->render_excerpt( $settings );
@@ -845,7 +842,7 @@ class QF_Block {
 					$this->render_read_more_button( $link_target );
 				}
 				if ( $show_title ) {
-					$this->render_title( $link_target );
+					$this->render_title( $link_target, $settings );
 				}
 				if ( $show_excerpt ) {
 					$this->render_excerpt( $settings );
@@ -881,7 +878,7 @@ class QF_Block {
 					$this->render_read_more_button( $link_target );
 				}
 				if ( $show_title ) {
-					$this->render_title( $link_target );
+					$this->render_title( $link_target, $settings );
 				}
 				if ( $show_date || $show_author ) {
 					$this->render_meta( $show_date, $show_author );
@@ -908,7 +905,7 @@ class QF_Block {
 					<?php $this->render_featured_image( $settings, $link_target ); ?>
 					<?php if ( $show_title ) : ?>
 						<div class="qf-card-overlay">
-							<?php $this->render_title( $link_target ); ?>
+							<?php $this->render_title( $link_target, $settings ); ?>
 						</div>
 					<?php endif; ?>
 				</div>
@@ -919,7 +916,7 @@ class QF_Block {
 					$this->render_read_more_button( $link_target );
 				}
 				if ( ! $show_image && $show_title ) {
-					$this->render_title( $link_target );
+					$this->render_title( $link_target, $settings );
 				}
 				if ( $show_excerpt ) {
 					$this->render_excerpt( $settings );
@@ -940,11 +937,17 @@ class QF_Block {
 	 * Render title
 	 *
 	 * @param string $link_target Link target.
+	 * @param array  $settings    Settings (title_link_decoration: none|underline).
 	 */
-	private function render_title( $link_target ) {
+	private function render_title( $link_target, array $settings = [] ) {
+		$decoration = $settings['title_link_decoration'] ?? 'none';
+		if ( ! in_array( $decoration, [ 'none', 'underline' ], true ) ) {
+			$decoration = 'none';
+		}
+		$title_style = 'text-decoration:' . $decoration . ';color:inherit;';
 		?>
 		<h3 class="qf-card-title">
-			<a href="<?php echo esc_url( get_permalink() ); ?>" target="<?php echo esc_attr( $link_target ); ?>">
+			<a href="<?php echo esc_url( get_permalink() ); ?>" target="<?php echo esc_attr( $link_target ); ?>" style="<?php echo esc_attr( $title_style ); ?>">
 				<?php echo esc_html( get_the_title() ); ?>
 			</a>
 		</h3>
@@ -1046,21 +1049,88 @@ class QF_Block {
 	}
 
 	/**
+	 * Reliable page count for paginate_links (WP_Query can report max_num_pages as 0 while found_posts is set).
+	 *
+	 * @param \WP_Query|\Query_Forge\QF_Query_Result_Wrapper|object $query Query instance.
+	 * @return int Total pages (minimum 1).
+	 */
+	private function resolve_query_max_pages( $query ) {
+		if ( ! is_object( $query ) ) {
+			return 1;
+		}
+		$max = isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 0;
+		if ( $max > 0 ) {
+			return $max;
+		}
+		$found = isset( $query->found_posts ) ? (int) $query->found_posts : 0;
+		$per_page = 0;
+		if ( $query instanceof \WP_Query ) {
+			$per_page = (int) $query->get( 'posts_per_page' );
+		}
+		if ( $per_page <= 0 ) {
+			$per_page = max( 1, (int) get_option( 'posts_per_page' ) );
+		}
+		if ( $found <= 0 ) {
+			return 1;
+		}
+		return max( 1, (int) ceil( $found / $per_page ) );
+	}
+
+	/**
+	 * Base URL for pagination links: singular permalink when on a static page, otherwise request URL.
+	 *
+	 * @return string
+	 */
+	private function resolve_pagination_base_url() {
+		if ( is_singular() ) {
+			$object_id = get_queried_object_id();
+			if ( $object_id ) {
+				$permalink = get_permalink( $object_id );
+				if ( $permalink ) {
+					return $permalink;
+				}
+			}
+		}
+		global $wp;
+		$request = ( isset( $wp->request ) && is_string( $wp->request ) ) ? $wp->request : '';
+		return home_url( add_query_arg( [], $request ) );
+	}
+
+	/**
+	 * Current page number from the request (paged query arg and query vars used on singular).
+	 *
+	 * @return int>=1
+	 */
+	private function resolve_request_paged() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pagination parameter.
+		if ( isset( $_GET['paged'] ) ) {
+			return max( 1, absint( wp_unslash( $_GET['paged'] ) ) );
+		}
+		$qv = get_query_var( 'paged' );
+		if ( $qv ) {
+			return max( 1, absint( $qv ) );
+		}
+		$qv = get_query_var( 'page' );
+		if ( $qv ) {
+			return max( 1, absint( $qv ) );
+		}
+		return 1;
+	}
+
+	/**
 	 * Render pagination
 	 *
 	 * @param \WP_Query|\Query_Forge\QF_Query_Result_Wrapper $query Query object.
 	 * @param array                                           $settings Settings.
 	 */
 	public function render_pagination( $query, $settings = [] ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pagination parameter.
-		$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+		$paged           = $this->resolve_request_paged();
 		$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
 		$is_ajax         = 'ajax' === $pagination_type;
 
-		global $wp;
-		$current_url = home_url( add_query_arg( [], $wp->request ) );
-
-		$base = remove_query_arg( 'paged', $current_url );
+		$current_url = $this->resolve_pagination_base_url();
+		$base        = remove_query_arg( 'paged', $current_url );
+		$base        = remove_query_arg( 'page', $base );
 
 		$base = trailingslashit( $base );
 		if ( strpos( $base, '?' ) !== false ) {
@@ -1069,7 +1139,7 @@ class QF_Block {
 			$format = '?paged=%#%';
 		}
 
-		$max_pages = $query->max_num_pages ?? 1;
+		$max_pages = $this->resolve_query_max_pages( $query );
 
 		$prev_text = ! empty( $settings['pagination_prev_text'] ) ? $settings['pagination_prev_text'] : __( '&laquo; Previous', 'query-forge' );
 		$next_text = ! empty( $settings['pagination_next_text'] ) ? $settings['pagination_next_text'] : __( 'Next &raquo;', 'query-forge' );
@@ -1099,9 +1169,8 @@ class QF_Block {
 	 * @param array                                           $settings Settings.
 	 */
 	private function render_load_more_button( $query, $settings = [] ) {
-		$max_pages = $query->max_num_pages ?? 1;
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+		$max_pages    = $this->resolve_query_max_pages( $query );
+		$current_page = $this->resolve_request_paged();
 
 		if ( $current_page >= $max_pages ) {
 			return;
@@ -1127,9 +1196,8 @@ class QF_Block {
 	 * @param array                                           $settings Settings.
 	 */
 	private function render_infinite_scroll_trigger( $query, $settings = [] ) {
-		$max_pages = $query->max_num_pages ?? 1;
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+		$max_pages    = $this->resolve_query_max_pages( $query );
+		$current_page = $this->resolve_request_paged();
 
 		if ( $current_page >= $max_pages ) {
 			return;

@@ -5,7 +5,7 @@ Tags: query builder, block, gutenberg, elementor, posts, custom post types, visu
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,7 +73,8 @@ It works wherever you build: use the **Query Forge block** in the WordPress bloc
 * Context-aware behavior
 * Preview Node — see live query results on the canvas as you build, before saving
 * Source Preview — browse and search raw source content inline on any Source node
-* Custom User Templates via Elementor Pro (Elementor only)
+* Custom User Templates for Elementor. 
+* Custom User Templates for Gutenberg using a custom shortcode system.
 
 [Upgrade to Pro →](https://queryforgeplugin.com)
 
@@ -181,6 +182,11 @@ Yes, but only with Pro. The Preview node shows live results on the canvas as you
 7. Smart Loop Grid widget in Elementor
 
 == Changelog ==
+
+= 1.3.1 =
+* Fixes Pagination (block) — Fixes missing page links (correct total page count when WordPress reports max_num_pages as 0, better base URL and current page on static/singular pages).
+* Added Title link decoration (block) — New “Underline title link” control (maps to titleLinkDecoration / underline vs none on the title link).
+* Added Custom Templates with Shortcodes for Gutenberg (PRO ONLY). 
 
 = 1.3.0 =
 * Added **Query Forge block** for the WordPress block editor — the same visual canvas, server-rendered card output, and full sidebar design controls (typography, colors, alignment, image ratio, shadow) stored as block attributes

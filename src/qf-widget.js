@@ -26,7 +26,9 @@
 		 * Initialize AJAX Pagination
 		 */
 		initAjaxPagination: function() {
-			$(document).on('click', '.qf-pagination a', function(e) {
+			// Only intercept clicks inside the Elementor widget. Gutenberg blocks also use .qf-pagination
+			// for standard (full page) links — those must not get preventDefault when there is no Elementor wrapper.
+			$(document).on('click', '.elementor-widget-qf_smart_loop_grid .qf-pagination a', function(e) {
 				e.preventDefault();
 
 				var $link = $(this);

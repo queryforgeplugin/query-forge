@@ -717,6 +717,13 @@ function EditComponent({ attributes, setAttributes }) {
                 value={attributes.titleAlign}
                 setAttributes={setAttributes}
               />
+              <ToggleControl
+                label="Underline title link"
+                checked={attributes.titleLinkDecoration === 'underline'}
+                onChange={(val) =>
+                  setAttributes({ titleLinkDecoration: val ? 'underline' : 'none' })
+                }
+              />
               <TypographyToolsPanel
                 prefix="cardTitle"
                 panelLabel="Title typography"
