@@ -1086,9 +1086,8 @@ class Smart_Loop_Grid extends Widget_Base {
 				'pagination_type' => $settings['pagination_type'] ?? 'standard',
 				'pagination_prev_text' => $settings['pagination_prev_text'] ?? '',
 				'pagination_next_text' => $settings['pagination_next_text'] ?? '',
-				'load_more_button_text' => $settings['load_more_button_text'] ?? '',
-				'loading_text' => $settings['loading_text'] ?? '',
-				'infinite_scroll_offset' => $settings['infinite_scroll_offset'] ?? 200,
+				'show_results_summary' => $settings['show_results_summary'] ?? '',
+				'results_summary_position' => $settings['results_summary_position'] ?? 'above_grid',
 			],
 		] ) );
 
@@ -1151,13 +1150,13 @@ class Smart_Loop_Grid extends Widget_Base {
 		}
 
 		$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
+		// Free: Load More / Infinite Scroll are not supported; legacy saved values fall back to standard links.
+		if ( in_array( $pagination_type, [ 'load_more', 'infinite_scroll' ], true ) ) {
+			$pagination_type = 'standard';
+		}
 		if ( ! empty( $settings['show_pagination'] ) && 'yes' === $settings['show_pagination'] ) {
 			if ( 'standard' === $pagination_type || 'ajax' === $pagination_type ) {
-				$this->render_pagination( $query, $settings );
-			} elseif ( 'load_more' === $pagination_type ) {
-				$this->render_load_more_button( $query, $settings );
-			} elseif ( 'infinite_scroll' === $pagination_type ) {
-				$this->render_infinite_scroll_trigger( $query, $settings );
+				$this->render_pagination( $query, array_merge( $settings, [ 'pagination_type' => $pagination_type ] ) );
 			}
 		}
 
@@ -1633,57 +1632,6 @@ class Smart_Loop_Grid extends Widget_Base {
 			$widget_id = $this->get_id();
 			echo '<div class="qf-pagination' . esc_attr( $ajax_class ) . '" data-widget-id="' . esc_attr( $widget_id ) . '">' . wp_kses_post( $pagination ) . '</div>';
 		}
-	}
-
-	/**
-	 * Render Load More button
-	 *
-	 * @param \WP_Query|\Query_Forge\QF_Query_Result_Wrapper $query Query object.
-	 * @param array                                                        $settings Widget settings.
-	 */
-	private function render_load_more_button( $query, $settings = [] ) {
-		$max_pages = $query->max_num_pages ?? 1;
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- $_GET['paged'] is a public pagination parameter, not form data.
-		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
-
-		if ( $current_page >= $max_pages ) {
-			return; // No more pages to load.
-		}
-
-		$widget_id = $this->get_id();
-		$next_page = $current_page + 1;
-		$button_text = ! empty( $settings['load_more_button_text'] ) ? $settings['load_more_button_text'] : __( 'Load More', 'query-forge' );
-		$loading_text = ! empty( $settings['loading_text'] ) ? $settings['loading_text'] : __( 'Loading...', 'query-forge' );
-		?>
-		<div class="qf-load-more-wrapper" data-widget-id="<?php echo esc_attr( $widget_id ); ?>" data-next-page="<?php echo esc_attr( $next_page ); ?>" data-loading-text="<?php echo esc_attr( $loading_text ); ?>">
-			<button type="button" class="qf-load-more-button">
-				<?php echo esc_html( $button_text ); ?>
-			</button>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Render Infinite Scroll trigger
-	 *
-	 * @param \WP_Query|\Query_Forge\QF_Query_Result_Wrapper $query Query object.
-	 * @param array                                                        $settings Widget settings.
-	 */
-	private function render_infinite_scroll_trigger( $query, $settings = [] ) {
-		$max_pages = $query->max_num_pages ?? 1;
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- $_GET['paged'] is a public pagination parameter, not form data.
-		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
-
-		if ( $current_page >= $max_pages ) {
-			return; // No more pages to load.
-		}
-
-		$widget_id = $this->get_id();
-		$next_page = $current_page + 1;
-		$scroll_offset = ! empty( $settings['infinite_scroll_offset'] ) ? absint( $settings['infinite_scroll_offset'] ) : 200;
-		?>
-		<div class="qf-infinite-scroll-trigger" data-widget-id="<?php echo esc_attr( $widget_id ); ?>" data-next-page="<?php echo esc_attr( $next_page ); ?>" data-max-pages="<?php echo esc_attr( $max_pages ); ?>" data-scroll-offset="<?php echo esc_attr( $scroll_offset ); ?>"></div>
-		<?php
 	}
 }
 

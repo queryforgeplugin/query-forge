@@ -60,6 +60,7 @@ final class Plugin {
 	private function includes() {
 		require_once QUERY_FORGE_PATH . 'includes/class-qf-query-parser.php';
 		require_once QUERY_FORGE_PATH . 'includes/class-qf-query-result-wrapper.php';
+		require_once QUERY_FORGE_PATH . 'includes/class-qf-block.php';
 	}
 
 	/**
@@ -68,12 +69,15 @@ final class Plugin {
 	 * @since 1.0.0
 	 */
 	private function hooks() {
+		add_action( 'init', [ $this, 'register_block' ] );
+		add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_block_editor_scripts' ] );
 		add_action( 'elementor/init', [ $this, 'on_elementor_init' ] );
 		// Use elementor/editor/after_enqueue_scripts with very high priority to run after Elementor finishes script registration.
 		add_action( 'elementor/editor/after_enqueue_scripts', [ $this, 'enqueue_editor_scripts' ], 999 );
 		add_action( 'elementor/frontend/after_enqueue_styles', [ $this, 'enqueue_widget_styles' ] );
 		add_action( 'elementor/editor/after_enqueue_styles', [ $this, 'enqueue_widget_styles' ] );
 		add_action( 'wp_ajax_query_forge_get_meta_keys', [ $this, 'ajax_get_meta_keys' ] );
+		add_action( 'wp_ajax_query_forge_search_terms', [ $this, 'ajax_search_terms' ] );
 		add_action( 'wp_ajax_query_forge_save_query', [ $this, 'ajax_save_query' ] );
 		add_action( 'wp_ajax_query_forge_get_saved_queries', [ $this, 'ajax_get_saved_queries' ] );
 		add_action( 'wp_ajax_query_forge_delete_query', [ $this, 'ajax_delete_query' ] );
@@ -146,17 +150,92 @@ final class Plugin {
 			true
 		);
 
-		// Get only user-created custom post types (exclude built-in WordPress post types).
+		wp_localize_script(
+			'query_forge_editor',
+			'QueryForgeConfig',
+			[
+				'postTypes' => $this->get_post_types_for_localize(),
+				'userRoles' => $this->get_user_roles_for_localize(),
+				'assetsUrl' => QUERY_FORGE_URL . 'assets/',
+				'nonce'     => wp_create_nonce( 'query_forge_nonce' ),
+				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+				'version'   => QUERY_FORGE_VERSION,
+			]
+		);
+
+		// Enqueue bundled React Flow CSS (bundled during build process).
+		wp_enqueue_style(
+			'query_forge_reactflow',
+			QUERY_FORGE_URL . 'assets/js/style-qf-editor.css',
+			[],
+			QUERY_FORGE_VERSION
+		);
+	}
+
+	/**
+	 * Register the Gutenberg block (style handle + block.json; editor script is enqueued separately).
+	 *
+	 * @since 1.3.0
+	 */
+	public function register_block() {
+		$block = new QF_Block();
+		$block->register();
+	}
+
+	/**
+	 * Enqueue block editor script and shared QueryForgeConfig (same shape as Elementor editor localize).
+	 *
+	 * @since 1.3.0
+	 */
+	public function enqueue_block_editor_scripts() {
+		$asset_file = QUERY_FORGE_PATH . 'assets/js/qf-block.bundle.asset.php';
+		$asset      = file_exists( $asset_file ) ? include $asset_file : [ 'dependencies' => [], 'version' => QUERY_FORGE_VERSION ];
+
+		wp_enqueue_script(
+			'query_forge_block',
+			QUERY_FORGE_URL . 'assets/js/qf-block.bundle.js',
+			isset( $asset['dependencies'] ) ? $asset['dependencies'] : [],
+			isset( $asset['version'] ) ? $asset['version'] : QUERY_FORGE_VERSION,
+			true
+		);
+
+		wp_localize_script(
+			'query_forge_block',
+			'QueryForgeConfig',
+			[
+				'postTypes' => $this->get_post_types_for_localize(),
+				'userRoles' => $this->get_user_roles_for_localize(),
+				'assetsUrl' => QUERY_FORGE_URL . 'assets/',
+				'nonce'     => wp_create_nonce( 'query_forge_nonce' ),
+				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+				'version'   => QUERY_FORGE_VERSION,
+			]
+		);
+
+		wp_enqueue_style(
+			'query_forge_reactflow_block',
+			QUERY_FORGE_URL . 'assets/js/style-qf-editor.css',
+			[],
+			QUERY_FORGE_VERSION
+		);
+	}
+
+	/**
+	 * Custom public post types for the query builder (exclude built-in and system types).
+	 *
+	 * @since 1.3.0
+	 * @return array<int, array{name: string, label: string}>
+	 */
+	private function get_post_types_for_localize() {
 		$post_type_names = get_post_types(
 			[
 				'public'             => true,
 				'publicly_queryable' => true,
-				'_builtin'           => false, // Exclude built-in post types (post, page, attachment, etc.).
+				'_builtin'           => false,
 			],
 			'objects'
 		);
 
-		// Also exclude internal/system post types.
 		$excluded_types = [
 			'attachment',
 			'revision',
@@ -173,23 +252,18 @@ final class Plugin {
 
 		$post_types_array = [];
 		foreach ( $post_type_names as $post_type_name => $post_type_obj ) {
-			// Skip excluded internal types.
 			if ( in_array( $post_type_name, $excluded_types, true ) ) {
 				continue;
 			}
-
-			// Skip if it's a built-in type (double-check).
 			if ( isset( $post_type_obj->_builtin ) && $post_type_obj->_builtin ) {
 				continue;
 			}
-
 			$post_types_array[] = [
 				'name'  => $post_type_obj->name,
 				'label' => $post_type_obj->label ? $post_type_obj->label : $post_type_obj->name,
 			];
 		}
 
-		// Sort alphabetically by label.
 		usort(
 			$post_types_array,
 			function( $a, $b ) {
@@ -197,7 +271,16 @@ final class Plugin {
 			}
 		);
 
-		// Get all user roles for the builder.
+		return $post_types_array;
+	}
+
+	/**
+	 * All user roles for the query builder.
+	 *
+	 * @since 1.3.0
+	 * @return array<int, array{key: string, label: string}>
+	 */
+	private function get_user_roles_for_localize() {
 		global $wp_roles;
 		$user_roles = [];
 		if ( ! empty( $wp_roles ) && is_object( $wp_roles ) ) {
@@ -208,29 +291,8 @@ final class Plugin {
 				];
 			}
 		}
-
-		wp_localize_script(
-			'query_forge_editor',
-			'QueryForgeConfig',
-			[
-				'postTypes' => $post_types_array,
-				'userRoles' => $user_roles,
-				'assetsUrl' => QUERY_FORGE_URL . 'assets/',
-				'nonce'     => wp_create_nonce( 'query_forge_nonce' ),
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-			]
-		);
-
-		// Enqueue bundled React Flow CSS (bundled during build process).
-		wp_enqueue_style(
-			'query_forge_reactflow',
-			QUERY_FORGE_URL . 'assets/js/style-qf-editor.css',
-			[],
-			QUERY_FORGE_VERSION
-		);
+		return $user_roles;
 	}
-
-
 
 	/**
 	 * Enqueue Widget Styles
@@ -239,10 +301,17 @@ final class Plugin {
 	 */
 	public function enqueue_widget_styles() {
 		wp_enqueue_style(
-			'query_forge_widget',
+			'query_forge_widget_css',
 			QUERY_FORGE_URL . 'assets/css/qf-widget.css',
 			[],
 			QUERY_FORGE_VERSION
+		);
+		wp_enqueue_script(
+			'query_forge_widget',
+			QUERY_FORGE_URL . 'assets/js/qf-widget.js',
+			[ 'jquery' ],
+			QUERY_FORGE_VERSION,
+			true
 		);
 		wp_localize_script(
 			'query_forge_widget',
@@ -299,6 +368,21 @@ final class Plugin {
 			],
 		];
 
+		// Public taxonomies for this post type (filter node: taxonomy terms).
+		$taxonomy_fields = [];
+		$taxonomies      = get_object_taxonomies( $post_type, 'objects' );
+		foreach ( $taxonomies as $tax ) {
+			if ( ! $tax->public ) {
+				continue;
+			}
+			$taxonomy_fields[] = [
+				'key'      => 'tax:' . $tax->name,
+				'label'    => $tax->label,
+				'type'     => 'taxonomy',
+				'taxonomy' => $tax->name,
+			];
+		}
+
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct query required to get all meta keys, caching not applicable for dynamic meta key discovery.
 		$meta_keys = $wpdb->get_col(
@@ -338,14 +422,68 @@ final class Plugin {
 			];
 		}, $all_meta_keys );
 
-		// Combine standard fields and meta fields.
-		$all_fields = array_merge( $standard_fields, $meta_fields );
+		// Standard fields, then taxonomy fields, then meta fields.
+		$all_fields = array_merge( $standard_fields, $taxonomy_fields, $meta_fields );
 
 		wp_send_json_success( [
-			'fields' => $all_fields,
-			'standard_fields' => $standard_fields,
-			'meta_keys' => $all_meta_keys, // Keep for backward compatibility.
+			'fields'            => $all_fields,
+			'taxonomy_fields'   => $taxonomy_fields,
+			'standard_fields'   => $standard_fields,
+			'meta_keys'         => $all_meta_keys, // Keep for backward compatibility.
 		] );
+	}
+
+	/**
+	 * AJAX handler: Search taxonomy terms for filter node autocomplete (editor).
+	 *
+	 * @since 1.0.0
+	 */
+	public function ajax_search_terms() {
+		check_ajax_referer( 'query_forge_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'query-forge' ) ] );
+			return;
+		}
+
+		$taxonomy = isset( $_POST['taxonomy'] ) ? sanitize_key( wp_unslash( $_POST['taxonomy'] ) ) : '';
+		if ( '' === $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid taxonomy.', 'query-forge' ) ] );
+			return;
+		}
+
+		$search = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		if ( strlen( $search ) < 1 ) {
+			wp_send_json_success( [ 'terms' => [] ] );
+			return;
+		}
+
+		$terms = get_terms(
+			[
+				'taxonomy'   => $taxonomy,
+				'hide_empty' => false,
+				'number'     => 20,
+				'search'     => $search,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+			]
+		);
+
+		if ( is_wp_error( $terms ) ) {
+			wp_send_json_error( [ 'message' => $terms->get_error_message() ] );
+			return;
+		}
+
+		$out = [];
+		foreach ( $terms as $term ) {
+			$out[] = [
+				'id'   => (int) $term->term_id,
+				'name' => $term->name,
+				'slug' => $term->slug,
+			];
+		}
+
+		wp_send_json_success( [ 'terms' => $out ] );
 	}
 
 	/**
@@ -603,7 +741,7 @@ final class Plugin {
 		
 		$display_type = ! empty( $widget_settings['display_type'] ) ? $widget_settings['display_type'] : 'canned';
 		
-		if ( 'template' === $display_type && ! empty( $widget_settings['elementor_template_id'] ) ) {
+		if ( 'template' === $display_type && ! empty( $widget_settings['elementor_template_id'] ) && class_exists( '\Elementor\Plugin' ) ) {
 			$template_id = absint( $widget_settings['elementor_template_id'] );
 			$elementor_instance = \Elementor\Plugin::instance();
 			if ( $elementor_instance->frontend ) {
@@ -637,61 +775,83 @@ final class Plugin {
 		// Check if there are more pages
 		$max_pages = $query->max_num_pages ?? 1;
 		$has_more = $paged < $max_pages;
-		
-		// Generate pagination HTML if needed (for AJAX pagination)
+
+		// Regenerate pagination link HTML for any AJAX page change (standard or ajax pagination type).
 		$pagination_html = '';
-		if ( ! empty( $widget_settings['pagination_type'] ) && 'ajax' === $widget_settings['pagination_type'] ) {
-			$widget_id = isset( $_POST['widget_id'] ) ? sanitize_text_field( wp_unslash( $_POST['widget_id'] ) ) : 'ajax-' . time();
-			
-			global $wp;
-			$current_url = home_url( add_query_arg( [], $wp->request ) );
-			$base = remove_query_arg( 'paged', $current_url );
-			$base = trailingslashit( $base );
-			if ( strpos( $base, '?' ) !== false ) {
-				$format = '&paged=%#%';
-			} else {
-				$format = '?paged=%#%';
+		global $wp;
+		$current_url = home_url( add_query_arg( [], $wp->request ) );
+		$base = remove_query_arg( 'paged', $current_url );
+		$base = trailingslashit( $base );
+		if ( strpos( $base, '?' ) !== false ) {
+			$format = '&paged=%#%';
+		} else {
+			$format = '?paged=%#%';
+		}
+
+		$prev_text = ! empty( $widget_settings['pagination_prev_text'] ) ? $widget_settings['pagination_prev_text'] : __( '&laquo; Previous', 'query-forge' );
+		$next_text = ! empty( $widget_settings['pagination_next_text'] ) ? $widget_settings['pagination_next_text'] : __( 'Next &raquo;', 'query-forge' );
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- $_GET['paged'] is a public pagination parameter, already sanitized via absint() above.
+		$original_paged = isset( $_GET['paged'] ) ? wp_unslash( $_GET['paged'] ) : null;
+		$_GET['paged'] = $paged;
+
+		$pagination = paginate_links(
+			[
+				'total'     => $max_pages,
+				'current'   => $paged,
+				'prev_text' => $prev_text,
+				'next_text' => $next_text,
+				'format'    => $format,
+				'base'      => $base . '%_%',
+			]
+		);
+
+		if ( null !== $original_paged ) {
+			$_GET['paged'] = $original_paged;
+		} else {
+			unset( $_GET['paged'] );
+		}
+
+		if ( $pagination ) {
+			$pagination_html = wp_kses_post( $pagination );
+		}
+
+		// Results summary ("Showing X–Y of Z") for AJAX refresh
+		$results_summary_html = '';
+		if ( ! empty( $widget_settings['show_results_summary'] ) && 'yes' === $widget_settings['show_results_summary'] ) {
+			$total = (int) $query->found_posts;
+			$per_page = 0;
+			if ( is_object( $query ) && method_exists( $query, 'get' ) ) {
+				$per_page = (int) $query->get( 'posts_per_page' );
 			}
-			
-			$prev_text = ! empty( $widget_settings['pagination_prev_text'] ) ? $widget_settings['pagination_prev_text'] : __( '&laquo; Previous', 'query-forge' );
-			$next_text = ! empty( $widget_settings['pagination_next_text'] ) ? $widget_settings['pagination_next_text'] : __( 'Next &raquo;', 'query-forge' );
-			
-			// Temporarily set $_GET['paged'] so paginate_links can detect it
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- $_GET['paged'] is a public pagination parameter, already sanitized via absint() above.
-			$original_paged = isset( $_GET['paged'] ) ? wp_unslash( $_GET['paged'] ) : null;
-			$_GET['paged'] = $paged;
-			
-			$pagination = paginate_links(
-				[
-					'total'     => $max_pages,
-					'current'   => $paged,
-					'prev_text' => $prev_text,
-					'next_text' => $next_text,
-					'format'    => $format,
-					'base'      => $base . '%_%',
-				]
-			);
-			
-			// Restore original $_GET['paged'] if it existed
-			if ( null !== $original_paged ) {
-				$_GET['paged'] = $original_paged;
-			} else {
-				unset( $_GET['paged'] );
+			if ( $per_page <= 0 && $max_pages > 0 && $total > 0 ) {
+				$per_page = (int) max( 1, ceil( $total / $max_pages ) );
 			}
-			
-			if ( $pagination ) {
-				// Return just the pagination links HTML (the wrapper div is already in the DOM)
-				$pagination_html = wp_kses_post( $pagination );
+			if ( $per_page <= 0 ) {
+				$per_page = max( 1, (int) get_option( 'posts_per_page' ) );
+			}
+			$start = ( ( $paged - 1 ) * $per_page ) + 1;
+			$end   = min( $paged * $per_page, $total );
+			if ( $total > 0 && $start <= $end ) {
+				/* translators: 1: first result number, 2: last result number, 3: total results. */
+				$text = sprintf(
+					esc_html__( 'Showing %1$d–%2$d of %3$d results', 'query-forge' ),
+					$start,
+					$end,
+					$total
+				);
+				$results_summary_html = '<div class="qf-results-summary">' . esc_html( $text ) . '</div>';
 			}
 		}
-		
+
 		wp_send_json_success( [
-			'html'            => $html,
-			'has_more'        => $has_more,
-			'next_page'       => $has_more ? $paged + 1 : null,
-			'current_page'    => $paged,
-			'max_pages'       => $max_pages,
-			'pagination_html' => $pagination_html,
+			'html'                 => $html,
+			'has_more'             => $has_more,
+			'next_page'            => $has_more ? $paged + 1 : null,
+			'current_page'         => $paged,
+			'max_pages'            => $max_pages,
+			'pagination_html'      => $pagination_html,
+			'results_summary_html' => $results_summary_html,
 		] );
 	}
 
@@ -707,7 +867,7 @@ final class Plugin {
 			'display_type', 'card_style', 'pagination_type', 'link_target', 'image_size',
 			'pagination_prev_text', 'pagination_next_text',
 		];
-		$allowed_yes_no = [ 'show_title', 'show_excerpt', 'show_date', 'show_author', 'show_image' ];
+		$allowed_yes_no = [ 'show_title', 'show_excerpt', 'show_date', 'show_author', 'show_image', 'show_results_summary' ];
 		$sanitized = [];
 		foreach ( $allowed_string_keys as $key ) {
 			if ( isset( $raw[ $key ] ) && is_string( $raw[ $key ] ) ) {
@@ -724,6 +884,9 @@ final class Plugin {
 		}
 		if ( isset( $raw['excerpt_length'] ) ) {
 			$sanitized['excerpt_length'] = absint( $raw['excerpt_length'] );
+		}
+		if ( isset( $raw['results_summary_position'] ) && is_string( $raw['results_summary_position'] ) ) {
+			$sanitized['results_summary_position'] = sanitize_text_field( $raw['results_summary_position'] );
 		}
 		return $sanitized;
 	}

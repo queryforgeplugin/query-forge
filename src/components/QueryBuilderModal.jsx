@@ -18,6 +18,7 @@ import LogicNode from './nodes/LogicNode';
 import TargetNode from './nodes/TargetNode';
 import NodeSettingsPanel from './NodeSettingsPanel';
 import UpsellModal from './UpsellModal';
+import { __, sprintf } from '@wordpress/i18n';
 import { validateGraph } from '../utils/validator';
 import { transformToSchema } from '../utils/schemaTransformer';
 
@@ -155,14 +156,172 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
   );
 
   // Nodes with data.unconnected set for those not on any path to Output (subtle indicator in node components).
+  // outputLogicSummary: display-only; computed here for Target node (never persisted).
   const displayNodes = React.useMemo(() => {
     const unconnectedSet = new Set(transformResult.unconnectedNodeIds || []);
-    return nodes.map((n) =>
-      unconnectedSet.has(n.id)
-        ? { ...n, data: { ...n.data, unconnected: true } }
-        : { ...n, data: { ...n.data, unconnected: false } }
-    );
-  }, [nodes, transformResult.unconnectedNodeIds]);
+
+    const targetNode = nodes.find((n) => n.type === 'target');
+    const targetNodeId = targetNode?.id;
+
+    let outputLogicSummary = null;
+
+    if (targetNodeId) {
+      const allIncoming = edges.filter((e) => e.target === targetNodeId);
+      const seen = new Set();
+      const incomingEdges = allIncoming.filter((e) => {
+        if (seen.has(e.source)) {
+          return false;
+        }
+        seen.add(e.source);
+        return true;
+      });
+
+      const incomingNodes = incomingEdges
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter(Boolean);
+
+      const incomingNonSourceRaw = incomingNodes.filter((n) => n.type !== 'source');
+      const nonSourceIncoming = incomingNonSourceRaw.filter((n) => !unconnectedSet.has(n.id));
+
+      if (incomingEdges.length === 0) {
+        outputLogicSummary = {
+          label: null,
+          message: __(
+            'Nothing is connected to this output. Connect Source or a filter path to build results.',
+            'query-forge'
+          ),
+        };
+      } else if (nonSourceIncoming.length === 0) {
+        // Distinguish: only Source(s) vs. non-source node(s) present but all unconnected / not in query.
+        if (incomingNonSourceRaw.length === 0) {
+          outputLogicSummary = {
+            label: null,
+            message: __(
+              'No filters applied. All posts from the source are returned.',
+              'query-forge'
+            ),
+          };
+        } else {
+          outputLogicSummary = {
+            label: null,
+            message: __(
+              'Incoming filters are incomplete or not in the query. Finish the filter node settings or connect Source only.',
+              'query-forge'
+            ),
+          };
+        }
+      } else {
+        const logicIncoming = nonSourceIncoming.filter((n) => n.type === 'logic');
+        const filterIncoming = nonSourceIncoming.filter((n) => n.type !== 'logic');
+
+        if (logicIncoming.length >= 1 && filterIncoming.length >= 1) {
+          outputLogicSummary = {
+            label: 'AND',
+            message: __(
+              'A Logic node result and one or more direct filter paths are all required (AND).',
+              'query-forge'
+            ),
+          };
+        } else if (logicIncoming.length > 1 && filterIncoming.length === 0) {
+          outputLogicSummary = {
+            label: 'AND',
+            message: __(
+              'Multiple Logic node results are all required (AND).',
+              'query-forge'
+            ),
+          };
+        } else if (logicIncoming.length === 1 && filterIncoming.length === 0) {
+          const rawRelation = logicIncoming[0].data?.relation || 'AND';
+          let relation = rawRelation.toString().toUpperCase().trim().replace(/\s+/g, ' ');
+          const relationMap = {
+            AND: {
+              label: 'AND',
+              message: __(
+                'Results must match all conditions (AND). Posts must satisfy every incoming branch.',
+                'query-forge'
+              ),
+            },
+            OR: {
+              label: 'OR',
+              message: __(
+                'Results match any condition (OR). Posts satisfying at least one incoming branch are included, duplicates removed.',
+                'query-forge'
+              ),
+            },
+            UNION: {
+              label: 'UNION',
+              message: __(
+                'Results from all branches are combined (UNION). Duplicates removed.',
+                'query-forge'
+              ),
+            },
+            'UNION ALL': {
+              label: 'UNION ALL',
+              message: __(
+                'Results from all branches are combined (UNION ALL). Duplicates kept.',
+                'query-forge'
+              ),
+            },
+          };
+          outputLogicSummary = relationMap[relation] || relationMap.AND;
+        } else if (filterIncoming.length > 1 && logicIncoming.length === 0) {
+          outputLogicSummary = {
+            label: 'AND',
+            message: __(
+              'Results must match all conditions (AND). To combine with OR instead, connect your filter paths through a Logic node.',
+              'query-forge'
+            ),
+          };
+        } else if (filterIncoming.length === 1 && logicIncoming.length === 0) {
+          outputLogicSummary = {
+            label: null,
+            message: __('Results are filtered by one condition.', 'query-forge'),
+          };
+        }
+      }
+
+      // Advisory: configured filters with empty value
+      if (
+        outputLogicSummary &&
+        nonSourceIncoming.some(
+          (n) =>
+            n.type === 'filter' &&
+            typeof n.data?.field === 'string' &&
+            n.data.field.trim() !== '' &&
+            (n.data?.value === undefined || n.data?.value === '')
+        )
+      ) {
+        outputLogicSummary = {
+          ...outputLogicSummary,
+          advisory: __(
+            'Note: one or more filters have no value set — this may be intentional if you are querying for empty or null values.',
+            'query-forge'
+          ),
+        };
+      }
+    }
+
+    return nodes.map((n) => {
+      const isUnconnected = unconnectedSet.has(n.id);
+      if (n.type === 'target') {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            unconnected: isUnconnected,
+            outputLogicSummary,
+          },
+        };
+      }
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          unconnected: isUnconnected,
+        },
+      };
+    });
+  }, [nodes, edges, transformResult.unconnectedNodeIds]);
 
   const onNodeClick = useCallback((event, node) => {
     event.stopPropagation();
@@ -457,7 +616,32 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
             alignItems: 'center',
           }}
         >
-          <h3 style={{ margin: 0 }}>Query Forge</h3>
+          <h3
+            style={{
+              margin: 0,
+              display: 'flex',
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+              gap: '0.35em',
+              fontWeight: 600,
+            }}
+          >
+            <span>{__('Query Forge Free', 'query-forge')}</span>
+            {typeof window !== 'undefined' && window.QueryForgeConfig?.version && (
+              <span
+                style={{
+                  fontWeight: 'normal',
+                  fontSize: '0.92em',
+                  color: 'rgba(255,255,255,0.88)',
+                }}
+              >
+                {sprintf(
+                  __('(version %s)', 'query-forge'),
+                  window.QueryForgeConfig.version
+                )}
+              </span>
+            )}
+          </h3>
           <div>
             <button
               onClick={(e) => {

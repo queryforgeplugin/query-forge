@@ -1,26 +1,75 @@
 // React is provided by WordPress via wp-element (available globally)
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback } = React;
+import { __ } from '@wordpress/i18n';
 import UpsellModal from './UpsellModal';
+
+const STANDARD_FIELD_KEYS = new Set(['post_title', 'post_date', 'post_author', 'post_content', 'post_excerpt']);
+
+function getSelectedFieldTypeFromNode(node) {
+  if (!node?.data?.field) {
+    return 'standard';
+  }
+  const field = node.data.field;
+  if (typeof field === 'string' && field.startsWith('tax:')) {
+    return 'taxonomy';
+  }
+  if (node.data.isCustomField) {
+    return 'meta';
+  }
+  if (STANDARD_FIELD_KEYS.has(field)) {
+    return 'standard';
+  }
+  return 'meta';
+}
+
+function getTaxonomyValueSegment(value) {
+  if (value == null || typeof value !== 'string') {
+    return '';
+  }
+  const lastComma = value.lastIndexOf(',');
+  const seg = lastComma >= 0 ? value.slice(lastComma + 1) : value;
+  return seg.trim();
+}
 
 const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
   const [upsellModal, setUpsellModal] = useState({ isOpen: false, featureName: '', description: '' });
   const [settings, setSettings] = useState(node?.data || {});
-  const [fields, setFields] = useState([]); // All fields: standard + meta
+  const [fields, setFields] = useState([]); // All fields: standard + taxonomy + meta
+  const [selectedFieldType, setSelectedFieldType] = useState(() => getSelectedFieldTypeFromNode(node));
   const [loadingMetaKeys, setLoadingMetaKeys] = useState(false);
   const [showCustomField, setShowCustomField] = useState(false);
   const [showDynamicTags, setShowDynamicTags] = useState(false);
   const [activeField, setActiveField] = useState(null); // Track which field is active for dynamic tags
   const dynamicTagsRef = useRef(null);
+  const taxTermSuggestRef = useRef(null);
+  const taxTermDebounceRef = useRef(null);
+  const taxTermAbortRef = useRef(null);
+  const [taxTermLoading, setTaxTermLoading] = useState(false);
+  const [taxTermSuggestions, setTaxTermSuggestions] = useState([]);
+  const [taxTermEmpty, setTaxTermEmpty] = useState(false);
+
+  const clearTaxTermSearch = useCallback(() => {
+    setTaxTermSuggestions([]);
+    setTaxTermEmpty(false);
+    setTaxTermLoading(false);
+    if (taxTermDebounceRef.current) {
+      clearTimeout(taxTermDebounceRef.current);
+      taxTermDebounceRef.current = null;
+    }
+    taxTermAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     setSettings(node?.data || {});
+    setSelectedFieldType(getSelectedFieldTypeFromNode(node));
+    clearTaxTermSearch();
     // Check if field is custom (not in dropdown).
     if (node?.type === 'filter' && node?.data?.field) {
       setShowCustomField(node?.data?.isCustomField || false);
     }
     setShowDynamicTags(false); // Close dynamic tag menu when node changes
     setActiveField(null); // Reset active field when node changes
-  }, [node]);
+  }, [node, clearTaxTermSearch]);
 
   // Fetch meta keys when filter node is selected and we have post types.
   useEffect(() => {
@@ -48,6 +97,32 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
       };
     }
   }, [showDynamicTags]);
+
+  useEffect(() => {
+    const open =
+      selectedFieldType === 'taxonomy' &&
+      (taxTermLoading || taxTermSuggestions.length > 0 || taxTermEmpty);
+    if (!open) {
+      return undefined;
+    }
+    const handle = (e) => {
+      if (taxTermSuggestRef.current && !taxTermSuggestRef.current.contains(e.target)) {
+        setTaxTermSuggestions([]);
+        setTaxTermEmpty(false);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [selectedFieldType, taxTermLoading, taxTermSuggestions.length, taxTermEmpty]);
+
+  useEffect(() => {
+    return () => {
+      if (taxTermDebounceRef.current) {
+        clearTimeout(taxTermDebounceRef.current);
+      }
+      taxTermAbortRef.current?.abort();
+    };
+  }, []);
 
   // Insert dynamic tag into value field
   const insertDynamicTag = (tag) => {
@@ -115,15 +190,119 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
     }
   };
 
+  const scheduleTaxTermSearch = (segment, fieldKey) => {
+    if (taxTermDebounceRef.current) {
+      clearTimeout(taxTermDebounceRef.current);
+      taxTermDebounceRef.current = null;
+    }
+    taxTermAbortRef.current?.abort();
+
+    if (!fieldKey || typeof fieldKey !== 'string' || !fieldKey.startsWith('tax:')) {
+      setTaxTermSuggestions([]);
+      setTaxTermEmpty(false);
+      setTaxTermLoading(false);
+      return;
+    }
+    const taxonomy = fieldKey.slice(4);
+    if (taxonomy.length < 1 || segment.length < 1) {
+      setTaxTermSuggestions([]);
+      setTaxTermEmpty(false);
+      setTaxTermLoading(false);
+      return;
+    }
+
+    taxTermDebounceRef.current = setTimeout(async () => {
+      const ac = new AbortController();
+      taxTermAbortRef.current = ac;
+      setTaxTermLoading(true);
+      setTaxTermEmpty(false);
+      try {
+        const ajaxUrl = window.QueryForgeConfig?.ajaxUrl;
+        const nonce = window.QueryForgeConfig?.nonce || '';
+        if (!ajaxUrl) {
+          setTaxTermLoading(false);
+          return;
+        }
+        const response = await fetch(ajaxUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            action: 'query_forge_search_terms',
+            nonce,
+            taxonomy,
+            search: segment,
+          }),
+          signal: ac.signal,
+        });
+        const data = await response.json();
+        if (data.success && data.data && Array.isArray(data.data.terms)) {
+          setTaxTermSuggestions(data.data.terms);
+          setTaxTermEmpty(data.data.terms.length === 0);
+        } else {
+          setTaxTermSuggestions([]);
+          setTaxTermEmpty(true);
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+        setTaxTermSuggestions([]);
+        setTaxTermEmpty(false);
+      } finally {
+        setTaxTermLoading(false);
+      }
+    }, 300);
+  };
+
+  const selectTaxonomyTermSlug = (slug) => {
+    const v = settings.value || '';
+    const lastComma = v.lastIndexOf(',');
+    const head = lastComma >= 0 ? `${v.slice(0, lastComma + 1)} ` : '';
+    const newValue = head + slug;
+    const nextSettings = { ...settings, value: newValue };
+    setSettings(nextSettings);
+    onUpdate(node.id, nextSettings);
+    setTaxTermSuggestions([]);
+    setTaxTermEmpty(false);
+    setTaxTermLoading(false);
+  };
+
   const handleFieldChange = (value) => {
+    clearTaxTermSearch();
     if (value === '__custom__') {
       setShowCustomField(true);
-      setSettings({ ...settings, field: '', isCustomField: true });
-    } else {
-      setShowCustomField(false);
-      setSettings({ ...settings, field: value, isCustomField: false });
-      onUpdate(node.id, { ...settings, field: value, isCustomField: false });
+      setSelectedFieldType('meta');
+      const next = { ...settings, field: '', isCustomField: true };
+      setSettings(next);
+      onUpdate(node.id, next);
+      return;
     }
+    setShowCustomField(false);
+    const found = fields.find((f) => f.key === value);
+    let nextType = 'meta';
+    if (found) {
+      if (found.type === 'standard') {
+        nextType = 'standard';
+      } else if (found.type === 'taxonomy') {
+        nextType = 'taxonomy';
+      } else {
+        nextType = 'meta';
+      }
+    } else if (typeof value === 'string' && value.startsWith('tax:')) {
+      nextType = 'taxonomy';
+    } else if (STANDARD_FIELD_KEYS.has(value)) {
+      nextType = 'standard';
+    }
+    setSelectedFieldType(nextType);
+
+    const nextSettings = { ...settings, field: value, isCustomField: false };
+    if (nextType === 'taxonomy') {
+      nextSettings.operator = 'IN';
+    } else if (['IN', 'NOT IN', 'AND'].includes(settings.operator || '')) {
+      nextSettings.operator = '=';
+    }
+    setSettings(nextSettings);
+    onUpdate(node.id, nextSettings);
   };
 
   const handleCustomFieldChange = (value) => {
@@ -253,14 +432,20 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
   };
 
   const renderFilterSettings = () => {
-    // Separate standard and meta fields for grouping.
-    const standardFields = fields.filter(f => f.type === 'standard');
-    const metaFields = fields.filter(f => f.type === 'meta');
-    
+    const standardFields = fields.filter((f) => f.type === 'standard');
+    const taxonomyFields = fields.filter((f) => f.type === 'taxonomy');
+    const metaFields = fields.filter((f) => f.type === 'meta');
+
+    const taxonomyOperatorValue =
+      selectedFieldType === 'taxonomy' && ['IN', 'NOT IN', 'AND'].includes(settings.operator || '')
+        ? settings.operator
+        : 'IN';
+    const standardOperatorValue = settings.operator || '=';
+
     return (
     <div>
       <label style={{ display: 'block', marginBottom: '10px' }}>
-          Field:
+          {__('Field:', 'query-forge')}
           {!showCustomField ? (
             <select
               value={settings.field || ''}
@@ -268,22 +453,29 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
               style={{ width: '100%', padding: '5px', marginTop: '5px', background: '#2d3748', color: '#fff', border: '1px solid #555' }}
               disabled={loadingMetaKeys}
             >
-              <option value="">-- Select Field --</option>
+              <option value="">{__('-- Select Field --', 'query-forge')}</option>
               {standardFields.length > 0 && (
-                <optgroup label="Standard Fields">
+                <optgroup label={__('Standard Fields', 'query-forge')}>
                   {standardFields.map(field => (
                     <option key={field.key} value={field.key}>{field.label}</option>
                   ))}
                 </optgroup>
               )}
+              {taxonomyFields.length > 0 && (
+                <optgroup label={__('Taxonomies', 'query-forge')}>
+                  {taxonomyFields.map(field => (
+                    <option key={field.key} value={field.key}>{field.label}</option>
+                  ))}
+                </optgroup>
+              )}
               {metaFields.length > 0 && (
-                <optgroup label="Custom Meta Fields">
+                <optgroup label={__('Custom Meta Fields', 'query-forge')}>
                   {metaFields.map(field => (
                     <option key={field.key} value={field.key}>{field.label}</option>
                   ))}
                 </optgroup>
               )}
-              <option value="__custom__">-- Custom Field --</option>
+              <option value="__custom__">{__('-- Custom Field --', 'query-forge')}</option>
             </select>
           ) : (
           <div>
@@ -321,53 +513,157 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
           </div>
         )}
         {loadingMetaKeys && (
-          <div style={{ fontSize: '11px', color: '#999', marginTop: '5px' }}>Loading fields...</div>
+          <div style={{ fontSize: '11px', color: '#999', marginTop: '5px' }}>{__('Loading fields…', 'query-forge')}</div>
         )}
       </label>
       <label style={{ display: 'block', marginBottom: '10px' }}>
-        Operator:
+        {__('Operator:', 'query-forge')}
         <select
-          value={settings.operator || '='}
+          value={selectedFieldType === 'taxonomy' ? taxonomyOperatorValue : standardOperatorValue}
           onChange={(e) => {
             const newOperator = e.target.value;
-            const allowedOperators = ['=', '!=', 'LIKE', 'NOT LIKE'];
-            if (!allowedOperators.includes(newOperator)) {
-              return;
+            if (selectedFieldType === 'taxonomy') {
+              const allowedTax = ['IN', 'NOT IN', 'AND'];
+              if (!allowedTax.includes(newOperator)) {
+                return;
+              }
+            } else {
+              const allowedOperators = ['=', '!=', 'LIKE', 'NOT LIKE'];
+              if (!allowedOperators.includes(newOperator)) {
+                return;
+              }
             }
-            setSettings({ ...settings, operator: newOperator });
+            const nextSettings = { ...settings, operator: newOperator };
+            setSettings(nextSettings);
+            onUpdate(node.id, nextSettings);
           }}
           style={{ width: '100%', padding: '5px', marginTop: '5px' }}
         >
-          <option value="=">=</option>
-          <option value="!=">!=</option>
-          <option value="LIKE">LIKE</option>
-          <option value="NOT LIKE">NOT LIKE</option>
+          {selectedFieldType === 'taxonomy' ? (
+            <>
+              <option value="IN">{__('Has any of', 'query-forge')}</option>
+              <option value="NOT IN">{__('Does not have', 'query-forge')}</option>
+              <option value="AND">{__('Has all of', 'query-forge')}</option>
+            </>
+          ) : (
+            <>
+              <option value="=">=</option>
+              <option value="!=">!=</option>
+              <option value="LIKE">LIKE</option>
+              <option value="NOT LIKE">NOT LIKE</option>
+            </>
+          )}
         </select>
       </label>
       {!['EXISTS', 'NOT EXISTS'].includes(settings.operator) && (
         <label style={{ display: 'block', marginBottom: '10px', position: 'relative' }}>
-          Value:
-          <input
-            type="text"
-            value={settings.value || ''}
-            onChange={(e) => setSettings({ ...settings, value: e.target.value })}
-            placeholder="Enter static text..."
-            style={{ width: '100%', padding: '5px', marginTop: '5px', background: '#2d3748', color: '#fff', border: '1px solid #555' }}
-          />
+          {__('Value:', 'query-forge')}
+          {selectedFieldType === 'taxonomy' ? (
+            <div ref={taxTermSuggestRef} style={{ position: 'relative', marginTop: '5px' }}>
+              <input
+                type="text"
+                value={settings.value || ''}
+                onChange={(e) => {
+                  const nextVal = e.target.value;
+                  const nextSettings = { ...settings, value: nextVal };
+                  setSettings(nextSettings);
+                  onUpdate(node.id, nextSettings);
+                  scheduleTaxTermSearch(getTaxonomyValueSegment(nextVal), settings.field);
+                }}
+                placeholder={__(
+                  'Type to search terms, or enter slugs or IDs (comma-separated)',
+                  'query-forge'
+                )}
+                style={{ width: '100%', padding: '5px', background: '#2d3748', color: '#fff', border: '1px solid #555' }}
+                autoComplete="off"
+              />
+              {settings.field?.startsWith('tax:') &&
+                getTaxonomyValueSegment(settings.value || '').length >= 1 &&
+                (taxTermLoading || taxTermSuggestions.length > 0 || taxTermEmpty) && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: '100%',
+                      marginTop: '4px',
+                      background: '#1e1e1e',
+                      border: '1px solid #444',
+                      borderRadius: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      zIndex: 1001,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+                    }}
+                  >
+                    {taxTermLoading && (
+                      <div style={{ padding: '10px', fontSize: '12px', color: '#999' }}>
+                        {__('Searching…', 'query-forge')}
+                      </div>
+                    )}
+                    {!taxTermLoading &&
+                      taxTermSuggestions.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            selectTaxonomyTermSlug(t.slug);
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '8px 10px',
+                            background: 'transparent',
+                            color: '#e2e8f0',
+                            border: 'none',
+                            borderBottom: '1px solid #333',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>{t.name}</span>
+                          <span style={{ color: '#718096', marginLeft: '8px' }}>({t.slug})</span>
+                        </button>
+                      ))}
+                    {!taxTermLoading && taxTermEmpty && (
+                      <div style={{ padding: '10px', fontSize: '12px', color: '#718096' }}>
+                        {__('No matching terms.', 'query-forge')}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={settings.value || ''}
+              onChange={(e) => {
+                const nextSettings = { ...settings, value: e.target.value };
+                setSettings(nextSettings);
+                onUpdate(node.id, nextSettings);
+              }}
+              placeholder={__('Enter static text…', 'query-forge')}
+              style={{ width: '100%', padding: '5px', marginTop: '5px', background: '#2d3748', color: '#fff', border: '1px solid #555' }}
+            />
+          )}
         </label>
       )}
+      {selectedFieldType !== 'taxonomy' && (
       <label style={{ display: 'block', marginBottom: '10px' }}>
-        Value Type:
+        {__('Value Type:', 'query-forge')}
         <select
           value={settings.valueType || 'CHAR'}
           onChange={(e) => setSettings({ ...settings, valueType: e.target.value })}
           style={{ width: '100%', padding: '5px', marginTop: '5px' }}
         >
-          <option value="CHAR">Text</option>
-          <option value="NUMERIC">Number</option>
-          <option value="DATE">Date</option>
+          <option value="CHAR">{__('Text', 'query-forge')}</option>
+          <option value="NUMERIC">{__('Number', 'query-forge')}</option>
+          <option value="DATE">{__('Date', 'query-forge')}</option>
         </select>
       </label>
+      )}
     </div>
   );
   };

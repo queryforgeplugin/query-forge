@@ -1,33 +1,41 @@
 === Query Forge ===
 
 Contributors: queryforge
-Tags: elementor, query builder, posts, custom post types, visual builder
-Requires at least: 5.8
-Tested up to: 6.9
+Tags: query builder, block, gutenberg, elementor, posts, custom post types, visual builder
+Requires at least: 6.0
+Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Visual Node-Based Query Builder for Elementor. Build complex WordPress queries with an intuitive drag-and-drop interface.
+Visual node-based query builder for WordPress. Works with the block editor and Elementor. Build complex post queries with a drag-and-drop interface — no code required.
+
+https://youtu.be/HNwzV9S5zNg
 
 == Description ==
 
-Query Forge is a powerful visual query builder for Elementor that lets you create sophisticated WordPress queries without writing code. Using a node-based interface powered by React Flow, you can visually connect data sources, filters, sorting, and logic to build exactly the queries you need.
+Query Forge is a visual query builder for WordPress. Using a node-based drag-and-drop interface powered by React Flow, you connect sources, filters, sorting, and logic to build exactly the queries you need — without writing a line of code.
+
+It works wherever you build: use the **Query Forge block** in the WordPress block editor (Gutenberg), or the **Smart Loop Grid widget** in Elementor. The same powerful canvas drives both.
+
+<img="http://queryforgeplugin.com/images/QueryForge-Way-Title.png">
 
 = Key Features =
 
-* Visual Node-Based Interface - Drag and drop nodes to build queries visually
-* Post Type Support - Query Posts, Pages, and all Custom Post Types
-* Taxonomy Filtering - Filter by categories, tags, and custom taxonomies
-* Basic Meta Filtering - Filter by custom fields with operators (=, !=, LIKE, NOT LIKE)
-* Flexible Sorting - Sort by Date, Title, or ID
-* Include/Exclude Posts - Fine-tune which posts appear in your results
-* AND Logic - Combine multiple filters with AND logic
-* Standard Pagination - Built-in pagination support
-* Save & Import Queries - Save your query configurations for reuse
-* Card Design Controls - Typography, colors, alignment, image ratio, border radius and shadow — no CSS required
-* Elementor Integration - Seamlessly integrates with Elementor widgets and templates
+* Visual Node-Based Interface — Drag and drop nodes to build queries visually
+* Works with Gutenberg and Elementor — one plugin, both editors
+* Post Type Support — Query Posts, Pages, and all Custom Post Types
+* Taxonomy Filtering — Filter by categories, tags, and custom taxonomies
+* Meta Filtering — Filter by custom fields with operators (=, !=, LIKE, NOT LIKE)
+* Flexible Sorting — Sort by Date, Title, or ID
+* Include/Exclude Posts — Fine-tune which posts appear in your results
+* AND Logic — Combine multiple filters with AND logic
+* Standard Pagination — Built-in pagination support
+* Save & Import Queries — Save your query configurations for reuse
+* Card Design Controls — Typography, colors, alignment, image ratio, border radius, and shadow — no CSS required
+* Inline Preview — See your query results directly in the editor canvas (block editor and Elementor)
+* Server-Side Rendering — Block output is rendered by PHP for fast, SEO-friendly results
 
 = Perfect For =
 
@@ -39,19 +47,19 @@ Query Forge is a powerful visual query builder for Elementor that lets you creat
 
 = Free vs Pro =
 
-Free Version Includes:
+**Free Version Includes:**
 
 * One source node per query (Posts, Pages, all CPTs)
-* Basic meta filters (single key, =, !=, LIKE, NOT LIKE operators)
-* Taxonomy filters
+* Taxonomy filters — categories, tags, and custom taxonomies (Has any of, Does not have, Has all of)
+* Meta filters (single key, =, !=, LIKE, NOT LIKE operators)
 * AND-only logic
 * Basic sorting (Date, Title, ID)
 * Standard pagination
-* Static literal values only
-* 5 Canned Templates
-* Card Design Controls
+* 5 Canned Card Styles
+* Full Card Design Controls — typography, colors, alignment, image ratio, border, shadow
+* Works with Gutenberg block editor and Elementor
 
-Pro Version Unlocks:
+**Pro Version Unlocks:**
 
 * Multiple source nodes per query
 * Advanced data sources (Users, Comments, SQL Tables, REST APIs)
@@ -63,9 +71,9 @@ Pro Version Unlocks:
 * AJAX pagination, Load More, and Infinite Scroll
 * Related content logic
 * Context-aware behavior
-* Custom User Templates from Elementor.
-* Preview Node — see live query results on the canvas as you build, before saving; click any post ID to copy it instantly
-* Source Preview — browse and search raw source content inline on any Source node; copy post IDs directly for use in Include/Exclude
+* Preview Node — see live query results on the canvas as you build, before saving
+* Source Preview — browse and search raw source content inline on any Source node
+* Custom User Templates via Elementor Pro (Elementor only)
 
 [Upgrade to Pro →](https://queryforgeplugin.com)
 
@@ -87,105 +95,120 @@ Pro Version Unlocks:
 
 = Requirements =
 
-* WordPress 5.8 or higher
+* WordPress 6.0 or higher
 * PHP 7.4 or higher
-* Elementor 3.0.0 or higher (must be installed and activated)
+* Elementor is optional — Query Forge works with the WordPress block editor without it
 
 = Build Your Own =
 
-The plugin ships with a pre-built editor bundle (assets/js/qf-editor.bundle.js and assets/js/style-qf-editor.css). The human-readable source code for the editor is available at:
+The plugin ships with a pre-built editor bundle. The human-readable source code is available at:
 
 **https://github.com/queryforgeplugin/Query-Forge**
 
-The source uses React (via WordPress wp-element), React Flow, and a standard JavaScript build toolchain (webpack).
+The source uses React (via WordPress wp-element), React Flow, and a standard webpack build toolchain.
 
-To build the editor assets from source:
+To build from source:
 
 1. Clone the repository: `git clone https://github.com/queryforgeplugin/Query-Forge.git`
-2. Install Node.js (v16 or higher recommended) and npm.
+2. Install Node.js (v16 or higher) and npm
 3. In the plugin root directory, run: `npm install`
 4. Run the build script: `npm run build`
 
-The build process compiles the React components and utilities in `src/` (including `src/editor-app.js`, `src/components/`, and `src/utils/`) into the bundled files used by the plugin.
+The build produces two bundles: `qf-editor.bundle.js` (Elementor) and `qf-block.bundle.js` (Gutenberg block editor).
 
 == External services ==
 
 This plugin does not connect to any third-party or external web services. All data is stored and processed within your own WordPress site.
 
-Some fields in the visual builder may show example URLs such as `https://api.example.com/endpoint`. These are placeholder examples only to help you understand how to configure your own integrations. Query Forge itself does not send any data to those URLs or to any external API.
+Some fields in the visual builder may show example URLs such as `https://api.example.com/endpoint`. These are placeholder examples only. Query Forge itself does not send any data to those URLs or to any external API.
 
-If you integrate Query Forge with your own APIs or services, please review the terms of service and privacy policies for those services as they will govern any data you choose to send.
+If you integrate Query Forge with your own APIs or services, please review the terms of service and privacy policies for those services.
 
 == Frequently Asked Questions ==
 
-= Does this work with Elementor Pro? =
+= Does this work without Elementor? =
 
-Yes! Query Forge works with both Elementor Free and Elementor Pro. Actually you don't need the pro version of Elementor in order to use Query Forge! 
+Yes! Query Forge works with the WordPress block editor (Gutenberg) without Elementor. Install and activate the plugin, add a Query Forge block to any page or post, and build your query. Elementor is completely optional.
+
+= Does this work with Elementor? =
+
+Yes! Query Forge includes the Smart Loop Grid widget for Elementor. It works with both Elementor Free and Elementor Pro. You do not need Elementor Pro to use Query Forge.
 
 = Can I use this with Custom Post Types? =
 
 Yes! The Free version supports all Custom Post Types. Simply select your CPT in the Source node.
 
-= What's the difference between Free and Pro version of Query Forge? =
+= What's the difference between Free and Pro? =
 
-The Free version provides essential query building capabilities for standard WordPress content using our unique visual builder. Our Pro version unlocks advanced features like dynamic data, multiple sources nodes and data types, complex logic, and advanced pagination options. See the "Free vs Pro" section above for details.
+The Free version provides essential query building for standard WordPress content using our visual builder. Pro unlocks advanced features like multiple sources, dynamic data, complex logic, and advanced pagination. See the "Free vs Pro" section above for details.
 
-= Can I build entire query loops with any CPT ? =
+= Can I build queries with any CPT? =
 
-Yes! Absolutely. Query Forge works with any Custom Post Type created by ACF, JetEngine, or any other plugin. The Free version allows you to build powerful queries using one source node at a time—you can filter, sort, and combine data from any single CPT to create complex, dynamic content displays. If you need to combine data from multiple sources in a single query, the Pro version unlocks multiple source nodes.
-
-= Can I export my queries to another wordpress install? =
-
-No. That is planned for a later pro version. 
+Yes. Query Forge works with any Custom Post Type created by ACF, JetEngine, or any other plugin. The Free version allows one source node per query — filter, sort, and display content from any single CPT. The Pro version unlocks multiple source nodes to combine data from different sources in a single query.
 
 = Can I save my queries? =
 
-Yes! You can save query configurations and import them later for reuse across different widgets.
+Yes! You can save query configurations and import them later for reuse across different blocks or widgets.
+
+= Can I export queries to another WordPress install? =
+
+Not yet — this is planned for a future Pro release.
 
 = Does this work with page builders other than Elementor? =
 
-No, Query Forge is specifically designed for Elementor and requires Elementor to be installed and activated.
+Query Forge is designed for the WordPress block editor (Gutenberg) and Elementor. It does not have integrations for other page builders at this time.
 
 = Is this plugin translation-ready? =
 
 Yes, Query Forge is translation-ready and includes a .pot file for translators.
 
-= Are there built in layouts that I can use ? =
+= Are there built-in card layouts? =
 
-Yes, Query Forge and Query Forge Pro both have built in layouts/card designs that with user controls. However, the PRO version gives you access to elementor's full loop engine if you have the pro version of Elementor Pro.
+Yes. Both Free and Pro include five canned card styles (Vertical, Horizontal, Minimal, Grid, Magazine) with full design controls — typography, colors, alignment, image ratio, border radius, and shadow — directly in the sidebar. No CSS required.
 
-= Can I see my queries BEFORE I save them ? =
+= Can I see query results before saving? =
 
-Yes! But only with the PRO version. 
+Yes, but only with Pro. The Preview node shows live results on the canvas as you build, updating automatically without saving. The Source Preview shows raw source content inline on any Source node.
 
 == Screenshots ==
 
 1. Visual node-based query builder interface
-2. Source node configuration
-3. Filter node with taxonomy and meta options
-4. Sort and pagination settings
-5. Query results displayed in Elementor
+2. Query Forge block in the WordPress block editor with inline preview
+3. Source node configuration
+4. Filter node with taxonomy and meta options
+5. Card Design sidebar controls
+6. Query results displayed in Gutenberg
+7. Smart Loop Grid widget in Elementor
 
 == Changelog ==
 
+= 1.3.0 =
+* Added **Query Forge block** for the WordPress block editor — the same visual canvas, server-rendered card output, and full sidebar design controls (typography, colors, alignment, image ratio, shadow) stored as block attributes
+* Plugin no longer requires Elementor — Elementor remains fully supported for the Smart Loop Grid widget; both integrations are active simultaneously
+* Inline block preview via ServerSideRender — see your query results directly in the block editor canvas
+* Raised minimum WordPress version to 6.0; tested up to 6.7
+
+= 1.2.1 =
+* Added taxonomy filtering to the Filter node — filter by categories, tags, and any custom taxonomy registered to the selected post type
+* Taxonomy operators: Has any of (IN), Does not have (NOT IN), Has all of (AND)
+* Live term search — type in the taxonomy value field to search and select terms by name
+* Fixed: query results now correctly include published posts only by default
+* Added Free/Pro type label to plugin header for clarity
+
 = 1.2.0 =
-* Added post IDs to Preview node results — each result now shows the post ID to the left of the title; click any ID to copy it to the clipboard with a visual confirmation flash
-* Added Search to Preview node — toggle inline search to filter results by title on demand
-* Added Source Preview (Pro) — enable on any post-type Source node to browse and search its raw content inline on the canvas; paginate through results and copy post IDs for use in Include/Exclude
+* Added post IDs to Preview node results — click any ID to copy it to the clipboard
+* Added Search to Preview node — filter results by title on demand
+* Added Source Preview (Pro) — browse and search raw source content inline on any Source node
 
 = 1.1.0 =
-* Added Preview node (Pro) — place a Preview node on the canvas to see live post titles and total result count as you build; updates automatically on canvas changes without saving or reloading
-* Added NOT LIKE operator to filter conditions for all fields
-* Added UNION and UNION ALL relations to the Logic node — cycle through all four relations (AND, OR, UNION, UNION ALL) by clicking the node label on the canvas
-* Added Card Design section — control typography, per-element alignment, colors, image ratio, border radius, and card shadow for canned card styles directly in the widget panel, no CSS required
-* Added Read More button to canned card styles — toggle on/off with configurable position (top or bottom of card content)
-* Fixed: canvas with no complete path from Source to Target now correctly returns no results instead of returning all posts
-* Fixed: filtering by post title now searches title only, not title and excerpt together
-* Fixed: filtering by post content and post excerpt now work as independent conditions
-* Fixed: disconnected nodes (not on a complete path to Target) are now visually dimmed on the canvas so you can immediately see what is and isn't part of your active query
-* Fixed: custom Elementor template display type is now correctly restricted to Pro — Free version uses canned card styles only
-* Improved: Logic node now shows all relation options with descriptions in the settings panel
-* Improved: query execution model rebuilt for more reliable results across complex multi-filter canvases
+* Added Preview node (Pro) — see live post titles and result count as you build
+* Added NOT LIKE operator to filter conditions
+* Added UNION and UNION ALL relations to the Logic node
+* Added Card Design section — typography, colors, alignment, image ratio, border radius, and shadow
+* Added Read More button to canned card styles
+* Fixed: canvas with no complete path now correctly returns no results
+* Fixed: disconnected nodes are now visually dimmed on the canvas
+* Improved: query execution model rebuilt for more reliable results
 
 = 1.0.0 =
 * Initial release
@@ -205,11 +228,12 @@ For support, feature requests, and documentation, please visit:
 
 Built with:
 
-* React Flow (https://reactflow.dev) - Node-based UI framework
-* Elementor (https://elementor.com) - Page builder integration
+* React Flow (https://reactflow.dev) — Node-based UI framework
+* WordPress Block Editor (Gutenberg) — Block integration
+* Elementor (https://elementor.com) — Widget integration
 
 == License ==
 
 Query Forge is licensed under the GPL v2 or later.
 
-Need more power? Upgrade to Query Forge Pro (https://queryforgeplugin.com) for advanced features like dynamic data, multiple data sources, SQL joins, and more.
+Need more power? Upgrade to Query Forge Pro (https://queryforgeplugin.com) for advanced features like multiple data sources, dynamic data, SQL joins, AJAX pagination, and more.
