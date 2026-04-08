@@ -92,24 +92,6 @@ class QF_Query_Parser {
 			return self::get_empty_query();
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-			$query_node = isset( $data['query'] ) ? $data['query'] : null;
-			$structure  = 'none';
-			if ( ! empty( $query_node ) && is_array( $query_node ) ) {
-				if ( ! empty( $query_node['filter'] ) ) {
-					$structure = 'single filter';
-				} elseif ( isset( $query_node['pipeline'] ) && is_array( $query_node['pipeline'] ) ) {
-					$structure = 'pipeline (' . count( $query_node['pipeline'] ) . ' steps)';
-				} elseif ( ! empty( $query_node['logic']['branches'] ) ) {
-					$structure = 'logic (' . count( $query_node['logic']['branches'] ) . ' branches)';
-				} elseif ( ! empty( $query_node['paths'] ) ) {
-					$structure = 'paths (' . count( $query_node['paths'] ) . ' paths)';
-				}
-			}
-			error_log( '[QF Schema Debug] Query generated: structure=' . $structure );
-			error_log( '[QF Schema Debug] Full schema (query part): ' . wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
-		}
-
 		try {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- $_GET['paged'] is a public pagination parameter, not form data.
 			$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
@@ -159,10 +141,6 @@ class QF_Query_Parser {
 			}
 
 			$post_ids = self::execute_query( $query_node, $query_args, null );
-
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-				error_log( '[QF Schema Debug] Query execution complete. Final combined post__in count: ' . count( $post_ids ) );
-			}
 
 			$final_args = $query_args;
 			unset( $final_args['_qf_where_filters'] );
@@ -503,21 +481,11 @@ class QF_Query_Parser {
 			foreach ( $query_node['paths'] as $path ) {
 				$path_results[] = self::execute_query( $path, $base_args, null );
 			}
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-				foreach ( $path_results as $idx => $ids ) {
-					$path_num = $idx + 1;
-					$arr     = is_array( $ids ) ? $ids : [];
-					error_log( '[QF Schema Debug] Path ' . $path_num . ' (before merge): count=' . count( $arr ) . ', ids=' . wp_json_encode( $arr ) );
-				}
-			}
 			$merged = [];
 			foreach ( $path_results as $ids ) {
 				$merged = array_merge( $merged, is_array( $ids ) ? $ids : [] );
 			}
 			$merged = array_values( array_unique( $merged ) );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-				error_log( '[QF Schema Debug] After merge: count=' . count( $merged ) . ', ids=' . wp_json_encode( $merged ) );
-			}
 			return $merged;
 		}
 
