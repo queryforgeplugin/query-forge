@@ -17,6 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class QF_Block {
 
 	/**
+	 * Per-request ordinal when multiple blocks exist on one page (stable instance id).
+	 *
+	 * @var int
+	 */
+	private static $render_instance_ordinal = 0;
+
+	/**
 	 * Unique wrapper ID for this render (pagination / load-more JS).
 	 *
 	 * @var string
@@ -57,10 +64,7 @@ class QF_Block {
 		wp_localize_script(
 			'query_forge_widget',
 			'QueryForgeWidget',
-			[
-				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'query_forge_nonce' ),
-			]
+			QF_Frontend_Search::get_widget_script_data()
 		);
 	}
 
@@ -81,14 +85,59 @@ class QF_Block {
 			$this->enqueue_frontend_widget_script();
 		}
 
-		$this->wrapper_id = uniqid( 'qf-block-' );
-		$settings         = $this->attributes_to_settings( $attributes );
+		++self::$render_instance_ordinal;
+		$logic_raw = isset( $attributes['logicJson'] ) ? (string) $attributes['logicJson'] : '';
+		$post_id   = get_the_ID();
+		if ( ! $post_id && is_singular() ) {
+			$post_id = get_queried_object_id();
+		}
+		$instance_id = md5( $logic_raw . '|' . (int) $post_id . '|' . self::$render_instance_ordinal );
+		$this->wrapper_id = 'qf-' . $instance_id;
+
+		$settings    = $this->attributes_to_settings( $attributes );
+		$paged       = $this->resolve_request_paged();
+		$ppp         = QF_Query_Parser::resolve_posts_per_page_for_query( $settings['qf_logic_json'] );
+		$search_on   = ! empty( $settings['search_enabled'] );
+
+		$ttl         = QF_Query_Cache::get_cache_ttl_from_logic( $logic_raw );
+		$logic_hash  = QF_Query_Cache::logic_hash( $logic_raw );
+		$ctx_hash    = md5( wp_json_encode( $attributes ) );
+		$cache_key   = QF_Query_Cache::build_cache_key( $logic_raw, $paged, $ppp, $ctx_hash, 'html' );
+		$cached_html = null;
+		if ( $ttl > 0 && ! QF_Query_Cache::should_bypass() && ! $is_editor_preview && '' !== $logic_raw && ! $search_on ) {
+			$cached_html = QF_Query_Cache::get( $cache_key, $logic_hash );
+		}
+
+		$wrapper_attrs = get_block_wrapper_attributes(
+			[
+				'data-qf-instance-id'          => $instance_id,
+				'data-qf-posts-per-page'       => (string) $ppp,
+				'data-qf-current-page'         => (string) $paged,
+				'data-qf-search-active'        => '0',
+				'data-qf-search-enabled'       => $search_on ? '1' : '0',
+				'data-qf-search-field'           => $settings['search_field'],
+				'data-qf-search-position'        => $settings['search_position'],
+				'data-qf-search-alignment'       => $settings['search_alignment'],
+				'data-qf-search-style'           => $settings['search_style'] ?? 'branded',
+				'class'                        => 'qf-query-forge-root',
+			]
+		);
 
 		ob_start();
-		echo '<div ' . get_block_wrapper_attributes() . '>';
+		echo '<div ' . $wrapper_attrs . '>';
 		$this->maybe_enqueue_google_fonts( $attributes );
-		$this->output_scoped_grid_css( $attributes );
-		$this->render_main( $attributes, $settings );
+		if ( null !== $cached_html ) {
+			echo $cached_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Cached trusted plugin HTML fragment.
+		} else {
+			ob_start();
+			$this->output_scoped_grid_css( $attributes );
+			$this->render_main( $attributes, $settings, $paged, $ppp, $instance_id );
+			$inner = ob_get_clean();
+			if ( $ttl > 0 && ! QF_Query_Cache::should_bypass() && ! $is_editor_preview && '' !== $logic_raw && ! $search_on ) {
+				QF_Query_Cache::set( $cache_key, $logic_hash, $inner, $ttl );
+			}
+			echo $inner; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Same as uncached render path.
+		}
 		echo '</div>';
 		return ob_get_clean();
 	}
@@ -563,6 +612,85 @@ class QF_Block {
 			'link_target'              => $attributes['linkTarget'] ?? '_self',
 			'card_button_position'     => $attributes['cardButtonPosition'] ?? 'bottom',
 			'title_link_decoration'    => ( isset( $attributes['titleLinkDecoration'] ) && 'underline' === $attributes['titleLinkDecoration'] ) ? 'underline' : 'none',
+			'search_enabled'           => ! empty( $attributes['searchEnabled'] ),
+			'search_position'          => self::normalize_search_position( isset( $attributes['searchPosition'] ) ? (string) $attributes['searchPosition'] : 'above' ),
+			'search_alignment'         => self::normalize_search_alignment( isset( $attributes['searchAlignment'] ) ? (string) $attributes['searchAlignment'] : 'left' ),
+			'search_field'             => self::normalize_search_field( isset( $attributes['searchField'] ) ? (string) $attributes['searchField'] : 'title' ),
+			'search_style'             => self::normalize_search_style( isset( $attributes['searchStyle'] ) ? (string) $attributes['searchStyle'] : 'branded' ),
+			'search_input_text_color'  => $this->sanitize_color( (string) ( $attributes['searchInputTextColor'] ?? '' ) ),
+			'search_placeholder_color' => $this->sanitize_color( (string) ( $attributes['searchPlaceholderColor'] ?? '' ) ),
+			'search_input_bg_color'    => $this->sanitize_color( (string) ( $attributes['searchInputBgColor'] ?? '' ) ),
+			'search_input_font_size'   => isset( $attributes['searchInputFontSize'] ) ? max( 0, (int) $attributes['searchInputFontSize'] ) : 0,
+			'search_border_radius'     => isset( $attributes['searchBorderRadius'] ) ? max( 0, (int) $attributes['searchBorderRadius'] ) : 0,
+			'search_focus_ring_color'  => $this->sanitize_color( (string) ( $attributes['searchFocusRingColor'] ?? '' ) ),
+			'search_icon_color'        => $this->sanitize_color( (string) ( $attributes['searchIconColor'] ?? '' ) ),
+			'search_border_color'      => $this->sanitize_color( (string) ( $attributes['searchBorderColor'] ?? '' ) ),
+			'search_border_width'      => isset( $attributes['searchBorderWidth'] ) ? max( 0, (int) $attributes['searchBorderWidth'] ) : 0,
+			'search_shadow_color'      => $this->sanitize_color( (string) ( $attributes['searchShadowColor'] ?? '' ) ),
+			'search_shadow_intensity'  => self::normalize_search_shadow_intensity( isset( $attributes['searchShadowIntensity'] ) ? (string) $attributes['searchShadowIntensity'] : 'medium' ),
+		];
+	}
+
+	/**
+	 * @param string $pos Raw position.
+	 * @return string
+	 */
+	private static function normalize_search_position( string $pos ): string {
+		return in_array( $pos, [ 'above', 'below', 'both' ], true ) ? $pos : 'above';
+	}
+
+	/**
+	 * @param string $align Raw alignment.
+	 * @return string
+	 */
+	private static function normalize_search_alignment( string $align ): string {
+		return in_array( $align, [ 'left', 'center', 'right' ], true ) ? $align : 'left';
+	}
+
+	/**
+	 * @param string $field Raw field slug.
+	 * @return string
+	 */
+	private static function normalize_search_field( string $field ): string {
+		return in_array( $field, [ 'title', 'content', 'title_content' ], true ) ? $field : 'title';
+	}
+
+	/**
+	 * @param string $style Raw search bar style.
+	 * @return string
+	 */
+	private static function normalize_search_style( string $style ): string {
+		return in_array( $style, [ 'branded', 'minimal', 'floating' ], true ) ? $style : 'branded';
+	}
+
+	/**
+	 * @param string $intensity Raw shadow intensity.
+	 * @return string
+	 */
+	private static function normalize_search_shadow_intensity( string $intensity ): string {
+		return in_array( $intensity, [ 'light', 'medium', 'strong' ], true ) ? $intensity : 'medium';
+	}
+
+	/**
+	 * Snake_case search style keys for QF_Frontend_Search::render_search_bar.
+	 *
+	 * @param array $settings Normalized block settings.
+	 * @return array<string, mixed>
+	 */
+	private function search_style_settings_for_render( array $settings ): array {
+		return [
+			'search_style'             => $settings['search_style'] ?? 'branded',
+			'search_input_text_color'  => $settings['search_input_text_color'] ?? '',
+			'search_placeholder_color' => $settings['search_placeholder_color'] ?? '',
+			'search_input_bg_color'    => $settings['search_input_bg_color'] ?? '',
+			'search_input_font_size'   => isset( $settings['search_input_font_size'] ) ? (int) $settings['search_input_font_size'] : 0,
+			'search_border_radius'     => isset( $settings['search_border_radius'] ) ? (int) $settings['search_border_radius'] : 0,
+			'search_focus_ring_color'  => $settings['search_focus_ring_color'] ?? '',
+			'search_icon_color'        => $settings['search_icon_color'] ?? '',
+			'search_border_color'      => $settings['search_border_color'] ?? '',
+			'search_border_width'      => isset( $settings['search_border_width'] ) ? (int) $settings['search_border_width'] : 0,
+			'search_shadow_color'      => $settings['search_shadow_color'] ?? '',
+			'search_shadow_intensity'  => $settings['search_shadow_intensity'] ?? 'medium',
 		];
 	}
 
@@ -571,8 +699,17 @@ class QF_Block {
 	 *
 	 * @param array $attributes Raw block attributes (for data-qf-settings JSON).
 	 * @param array $settings   Legacy-shaped settings for helpers.
+	 * @param int   $paged      Current page (explicit; not via $_GET in parser).
+	 * @param int   $ppp        Posts per page for the query.
+	 * @param string $instance_id Stable instance id for search UI.
 	 */
-	private function render_main( array $attributes, array $settings ): void {
+	private function render_main( array $attributes, array $settings, $paged = 1, $ppp = 10, $instance_id = '' ): void {
+		$search_cfg = [
+			'search_enabled'    => ! empty( $settings['search_enabled'] ),
+			'search_position'   => $settings['search_position'] ?? 'above',
+			'search_alignment'  => $settings['search_alignment'] ?? 'left',
+			'search_field'      => $settings['search_field'] ?? 'title',
+		];
 		$data_settings = wp_json_encode(
 			[
 				'logic_json'      => $attributes['logicJson'] ?? '',
@@ -607,6 +744,7 @@ class QF_Block {
 					'results_summary_font_style' => $attributes['resultsSummaryFontStyle'] ?? '',
 					'results_summary_letter_spacing' => $attributes['resultsSummaryLetterSpacing'] ?? '',
 					'results_summary_text_transform' => $attributes['resultsSummaryTextTransform'] ?? '',
+					'widget_id'                      => $this->wrapper_id,
 				],
 			]
 		);
@@ -618,7 +756,12 @@ class QF_Block {
 			return;
 		}
 
-		$query = QF_Query_Parser::get_query( $settings['qf_logic_json'] );
+		$spos = isset( $search_cfg['search_position'] ) ? $search_cfg['search_position'] : 'above';
+		if ( ! empty( $search_cfg['search_enabled'] ) && in_array( $spos, [ 'above', 'both' ], true ) ) {
+			QF_Frontend_Search::render_search_bar( $instance_id, 'above', $search_cfg['search_alignment'], $this->search_style_settings_for_render( $settings ) );
+		}
+
+		$query = QF_Query_Parser::get_query( $settings['qf_logic_json'], $paged, $ppp );
 
 		if ( ! $query || ! $query->have_posts() ) {
 			echo '<div class="qf-placeholder">';
@@ -635,12 +778,27 @@ class QF_Block {
 		}
 
 		$card_style = ! empty( $settings['card_style'] ) ? $settings['card_style'] : 'vertical';
+		$qf_paged   = max( 1, (int) $query->get( 'paged' ) );
+		if ( $qf_paged < 1 ) {
+			$qf_paged = 1;
+		}
+		$qf_max_pages = $this->resolve_query_max_pages( $query );
+		$qf_total     = (int) $query->found_posts;
+		$qf_ppp       = (int) $query->get( 'posts_per_page' );
+		if ( $qf_ppp <= 0 ) {
+			$qf_ppp = $ppp;
+		}
 		?>
 		<div
 			id="<?php echo esc_attr( $this->wrapper_id ); ?>"
 			class="qf-grid qf-card-style-<?php echo esc_attr( $card_style ); ?>"
 			data-qf-widget-id="<?php echo esc_attr( $this->wrapper_id ); ?>"
 			data-qf-settings="<?php echo esc_attr( $data_settings ); ?>"
+			data-qf-logic-json="<?php echo esc_attr( $settings['qf_logic_json'] ); ?>"
+			data-qf-total="<?php echo esc_attr( (string) $qf_total ); ?>"
+			data-qf-max-pages="<?php echo esc_attr( (string) $qf_max_pages ); ?>"
+			data-qf-posts-per-page="<?php echo esc_attr( (string) $qf_ppp ); ?>"
+			data-qf-current-page="<?php echo esc_attr( (string) $qf_paged ); ?>"
 		>
 			<?php
 			while ( $query->have_posts() ) {
@@ -651,6 +809,10 @@ class QF_Block {
 			?>
 		</div>
 		<?php
+
+		if ( ! empty( $search_cfg['search_enabled'] ) && in_array( $spos, [ 'below', 'both' ], true ) ) {
+			QF_Frontend_Search::render_search_bar( $instance_id, 'below', $search_cfg['search_alignment'], $this->search_style_settings_for_render( $settings ) );
+		}
 
 		if ( $show_results_summary && 'above_pagination' === $results_position ) {
 			$this->render_results_summary( $query, $attributes );
@@ -1102,19 +1264,7 @@ class QF_Block {
 	 * @return int>=1
 	 */
 	private function resolve_request_paged() {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pagination parameter.
-		if ( isset( $_GET['paged'] ) ) {
-			return max( 1, absint( wp_unslash( $_GET['paged'] ) ) );
-		}
-		$qv = get_query_var( 'paged' );
-		if ( $qv ) {
-			return max( 1, absint( $qv ) );
-		}
-		$qv = get_query_var( 'page' );
-		if ( $qv ) {
-			return max( 1, absint( $qv ) );
-		}
-		return 1;
+		return QF_Query_Parser::resolve_request_paged();
 	}
 
 	/**
@@ -1158,7 +1308,7 @@ class QF_Block {
 		if ( $pagination ) {
 			$ajax_class = $is_ajax ? ' qf-pagination-ajax' : '';
 			$block_id   = $this->wrapper_id;
-			echo '<div class="qf-pagination' . esc_attr( $ajax_class ) . '" data-widget-id="' . esc_attr( $block_id ) . '">' . wp_kses_post( $pagination ) . '</div>';
+			echo '<div class="qf-pagination' . esc_attr( $ajax_class ) . '" data-widget-id="' . esc_attr( $block_id ) . '" data-qf-search-active="0">' . wp_kses_post( $pagination ) . '</div>';
 		}
 	}
 

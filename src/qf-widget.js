@@ -1,7 +1,8 @@
 /**
  * Query Forge Widget Frontend JavaScript
  *
- * Handles AJAX pagination for numbered page links (when pagination type is AJAX).
+ * AJAX pagination and frontend search (debounced).
+ * Search settings are read from [data-qf-instance-id] (instance root).
  *
  * @package Query_Forge
  * @since   1.0.0
@@ -10,131 +11,247 @@
 (function($) {
 	'use strict';
 
-	/**
-	 * Query Forge Widget Handler
-	 */
-	var QFWidgetHandler = {
+	var DEBOUNCE_MS = 400;
+	var MIN_CHARS = 3;
+	var initialized = false;
 
-		/**
-		 * Initialize widget handlers
-		 */
+	function getCfg() {
+		if (typeof QueryForgeWidget !== 'undefined') {
+			return QueryForgeWidget;
+		}
+		return {};
+	}
+
+	function parseSettings($grid) {
+		var settingsData = $grid.data('qf-settings');
+		if (!settingsData || typeof settingsData === 'string') {
+			var attr = $grid.attr('data-qf-settings');
+			if (attr) {
+				try {
+					settingsData = JSON.parse(attr);
+				} catch (e) {
+					return null;
+				}
+			}
+		}
+		return settingsData || null;
+	}
+
+	function setSearchActive($scope, active) {
+		var v = active ? '1' : '0';
+		$scope.attr('data-qf-search-active', v);
+		$scope.find('.qf-pagination').attr('data-qf-search-active', v);
+	}
+
+	function getSearchField($scope) {
+		return $scope.attr('data-qf-search-field') || 'title';
+	}
+
+	function isSearchEnabled($scope) {
+		return $scope.attr('data-qf-search-enabled') === '1';
+	}
+
+	function syncSearchInputs($scope, val) {
+		$scope.find('.qf-search-input').val(val);
+	}
+
+	function applyGridResponse($scope, $grid, data) {
+		if (!$grid.length || !data) {
+			return;
+		}
+		$grid.html(data.html || '');
+		if (data.pagination_html) {
+			var $p = $scope.find('.qf-pagination');
+			if ($p.length) {
+				$p.html(data.pagination_html);
+			}
+		}
+		if (data.results_summary_html) {
+			var $rs = $scope.find('.qf-results-summary');
+			if ($rs.length) {
+				$rs.replaceWith(data.results_summary_html);
+			}
+		}
+		var sa = data.search_active === '1' || data.search_active === true;
+		setSearchActive($scope, sa);
+	}
+
+	function runGridRequest($scope, $grid, settings, options) {
+		var cfg = getCfg();
+		var data = {
+			action: options.action || 'query_forge_load_more_posts',
+			nonce: cfg.nonce,
+			logic_json: settings.logic_json,
+			widget_settings: JSON.stringify(settings.widget_settings || {}),
+			paged: options.paged || 1,
+			search_enabled: $scope.attr('data-qf-search-enabled') === '1' ? '1' : '0'
+		};
+		if (options.search_term !== undefined) {
+			data.search_term = options.search_term;
+		}
+		if (data.search_enabled === '1' && options.search_term !== undefined) {
+			data.search_field = options.search_field || getSearchField($scope);
+		}
+
+		$scope.addClass('qf-is-loading');
+
+		$.ajax({
+			url: cfg.ajaxUrl,
+			type: 'POST',
+			data: data,
+			success: function(res) {
+				if (res.success && res.data) {
+					applyGridResponse($scope, $grid, res.data);
+					if (options.scroll !== false) {
+						var top = $scope.offset();
+						if (top) {
+							$('html, body').animate({ scrollTop: top.top - 100 }, 400);
+						}
+					}
+				} else {
+					window.alert((res.data && res.data.message) || 'Error');
+				}
+			},
+			error: function() {
+				window.alert('Error loading posts. Please try again.');
+			},
+			complete: function() {
+				$scope.removeClass('qf-is-loading');
+			}
+		});
+	}
+
+	function doSearch($scope, $grid, settings, term, paged) {
+		runGridRequest($scope, $grid, settings, {
+			action: 'qf_search',
+			paged: paged || 1,
+			search_term: term,
+			search_field: getSearchField($scope),
+			scroll: false
+		});
+	}
+
+	function doPaginate($scope, $grid, settings, paged, searchTerm) {
+		var opts = {
+			action: 'query_forge_load_more_posts',
+			paged: paged,
+			scroll: true
+		};
+		if (searchTerm !== undefined) {
+			opts.search_term = searchTerm;
+			opts.search_field = getSearchField($scope);
+		}
+		runGridRequest($scope, $grid, settings, opts);
+	}
+
+	var debounceTimers = {};
+
+	var QFWidgetHandler = {
 		init: function() {
+			if (initialized) {
+				return;
+			}
+			initialized = true;
 			this.initAjaxPagination();
+			this.initSearch();
 		},
 
-		/**
-		 * Initialize AJAX Pagination
-		 */
 		initAjaxPagination: function() {
-			// Only intercept clicks inside the Elementor widget. Gutenberg blocks also use .qf-pagination
-			// for standard (full page) links — those must not get preventDefault when there is no Elementor wrapper.
-			$(document).on('click', '.elementor-widget-qf_smart_loop_grid .qf-pagination a', function(e) {
+			$(document).on('click', '[data-qf-instance-id] .qf-pagination.qf-pagination-ajax a', function(e) {
 				e.preventDefault();
-
 				var $link = $(this);
-				var $widget = $link.closest('.elementor-widget-qf_smart_loop_grid');
-				if (!$widget.length) {
-					$widget = $link.closest('.elementor-element').find('.elementor-widget-qf_smart_loop_grid');
-				}
-
-				if (!$widget.length) {
-					return;
-				}
-
-				var $grid = $widget.find('.qf-grid');
+				var $scope = $link.closest('[data-qf-instance-id]');
+				var $grid = $scope.find('.qf-grid').first();
 				if (!$grid.length) {
 					return;
 				}
-
-				// Get settings from data attribute
-				var settingsData = $grid.data('qf-settings');
-				// If data() doesn't parse JSON automatically, try parsing the attribute directly
-				if (!settingsData || typeof settingsData === 'string') {
-					var settingsAttr = $grid.attr('data-qf-settings');
-					if (settingsAttr) {
-						try {
-							settingsData = JSON.parse(settingsAttr);
-						} catch(e) {
-							console.error('Query Forge: Failed to parse settings JSON', e);
-							return;
-						}
-					}
-				}
-				if (!settingsData || !settingsData.logic_json) {
-					console.error('Query Forge: Invalid query data');
+				var settings = parseSettings($grid);
+				if (!settings || !settings.logic_json) {
 					return;
 				}
-
-				var url = $link.attr('href');
-				var paged = QFWidgetHandler.getPageFromUrl(url);
-
+				var href = $link.attr('href');
+				var paged = QFWidgetHandler.getPageFromUrl(href);
 				if (!paged) {
 					return;
 				}
-
-				// Show loading state
-				$grid.css('opacity', '0.5');
-				$grid.css('pointer-events', 'none');
-
-				var cfg = typeof QueryForgeWidget !== 'undefined' ? QueryForgeWidget : (typeof QFWidget !== 'undefined' ? QFWidget : {});
-
-				// Make AJAX request
-				$.ajax({
-					url: cfg.ajaxUrl,
-					type: 'POST',
-					data: {
-						action: 'query_forge_load_more_posts',
-						nonce: cfg.nonce,
-						logic_json: settingsData.logic_json,
-						widget_settings: JSON.stringify(settingsData.widget_settings || {}),
-						paged: paged,
-						widget_id: settingsData.widget_settings?.widget_id || ''
-					},
-					success: function(response) {
-						if (response.success && response.data) {
-							// Update grid content
-							$grid.html(response.data.html || '');
-
-							// Update pagination if provided (keeps active page in sync)
-							if (response.data.pagination_html) {
-								var $pagination = $widget.find('.qf-pagination');
-								if ($pagination.length) {
-									$pagination.html(response.data.pagination_html);
-								}
-							}
-
-							// Update results summary if provided (e.g. "Showing 11–20 of 116 results")
-							if (response.data.results_summary_html) {
-								var $summary = $widget.find('.qf-results-summary');
-								if ($summary.length) {
-									$summary.replaceWith(response.data.results_summary_html);
-								}
-							}
-
-							// Scroll to top of widget
-							$('html, body').animate({
-								scrollTop: $widget.offset().top - 100
-							}, 500);
-						} else {
-							alert('Error loading posts: ' + (response.data?.message || 'Unknown error'));
-						}
-					},
-					error: function(xhr, status, error) {
-						console.error('Query Forge AJAX Error:', error);
-						alert('Error loading posts. Please try again.');
-					},
-					complete: function() {
-						// Restore grid state
-						$grid.css('opacity', '1');
-						$grid.css('pointer-events', 'auto');
-					}
-				});
+				var term = ($scope.find('.qf-search-input').first().val() || '').trim();
+				if (isSearchEnabled($scope) && term.length >= MIN_CHARS) {
+					doPaginate($scope, $grid, settings, paged, term);
+				} else {
+					doPaginate($scope, $grid, settings, paged);
+				}
 			});
 		},
 
-		/**
-		 * Extract page number from URL
-		 */
+		initSearch: function() {
+			$(document).on('input', '[data-qf-instance-id] .qf-search-input', function() {
+				var $input = $(this);
+				var $scope = $input.closest('[data-qf-instance-id]');
+				var $grid = $scope.find('.qf-grid').first();
+				if (!$grid.length || !isSearchEnabled($scope)) {
+					return;
+				}
+				syncSearchInputs($scope, $input.val());
+
+				var settings = parseSettings($grid);
+				if (!settings || !settings.logic_json) {
+					return;
+				}
+				var term = ($input.val() || '').trim();
+				var key = $scope.attr('data-qf-instance-id') || 'x';
+
+				if (debounceTimers[key]) {
+					clearTimeout(debounceTimers[key]);
+				}
+
+				if (term.length === 0) {
+					setSearchActive($scope, false);
+					doSearch($scope, $grid, settings, '', 1);
+					return;
+				}
+				if (term.length < MIN_CHARS) {
+					return;
+				}
+
+				debounceTimers[key] = setTimeout(function() {
+					setSearchActive($scope, true);
+					doSearch($scope, $grid, settings, term, 1);
+				}, DEBOUNCE_MS);
+			});
+
+			$(document).on('keydown', '[data-qf-instance-id] .qf-search-input', function(e) {
+				if (e.key !== 'Enter') {
+					return;
+				}
+				e.preventDefault();
+				var $input = $(this);
+				var $scope = $input.closest('[data-qf-instance-id]');
+				var $grid = $scope.find('.qf-grid').first();
+				if (!$grid.length || !isSearchEnabled($scope)) {
+					return;
+				}
+				var settings = parseSettings($grid);
+				if (!settings || !settings.logic_json) {
+					return;
+				}
+				var term = ($input.val() || '').trim();
+				var key = $scope.attr('data-qf-instance-id') || 'x';
+				if (debounceTimers[key]) {
+					clearTimeout(debounceTimers[key]);
+				}
+				if (term.length === 0) {
+					setSearchActive($scope, false);
+					doSearch($scope, $grid, settings, '', 1);
+					return;
+				}
+				if (term.length < MIN_CHARS) {
+					return;
+				}
+				setSearchActive($scope, true);
+				doSearch($scope, $grid, settings, term, 1);
+			});
+		},
+
 		getPageFromUrl: function(url) {
 			if (!url) {
 				return null;
@@ -144,12 +261,10 @@
 		}
 	};
 
-	// Initialize when DOM is ready
 	$(document).ready(function() {
 		QFWidgetHandler.init();
 	});
 
-	// Also initialize if Elementor Frontend is available
 	if (typeof elementorFrontend !== 'undefined' && elementorFrontend.hooks && typeof elementorFrontend.hooks.addAction === 'function') {
 		elementorFrontend.hooks.addAction('frontend/element_ready/qf_smart_loop_grid.default', function() {
 			QFWidgetHandler.init();

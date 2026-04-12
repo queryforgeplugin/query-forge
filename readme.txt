@@ -2,10 +2,10 @@
 
 Contributors: queryforge
 Tags: query builder, block, gutenberg, elementor, posts, custom post types, visual builder
-Requires at least: 6.0
-Tested up to: 6.7
+Requires at least: 6.2
+Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -36,6 +36,8 @@ It works wherever you build: use the **Query Forge block** in the WordPress bloc
 * Card Design Controls — Typography, colors, alignment, image ratio, border radius, and shadow — no CSS required
 * Inline Preview — See your query results directly in the editor canvas (block editor and Elementor)
 * Server-Side Rendering — Block output is rendered by PHP for fast, SEO-friendly results
+* Results Search - AJAX Search of Results for both FREE and PRO versions. 
+* Results Caching for Free (upto 2 hrs) and Pro (unto 7 days). 
 
 = Perfect For =
 
@@ -58,6 +60,7 @@ It works wherever you build: use the **Query Forge block** in the WordPress bloc
 * 5 Canned Card Styles
 * Full Card Design Controls — typography, colors, alignment, image ratio, border, shadow
 * Works with Gutenberg block editor and Elementor
+* 2 Hour Caching.
 
 **Pro Version Unlocks:**
 
@@ -75,6 +78,7 @@ It works wherever you build: use the **Query Forge block** in the WordPress bloc
 * Source Preview — browse and search raw source content inline on any Source node
 * Custom User Templates for Elementor. 
 * Custom User Templates for Gutenberg using a custom shortcode system.
+* Up to 7 Day Caching.
 
 [Upgrade to Pro →](https://queryforgeplugin.com)
 
@@ -182,6 +186,24 @@ Yes, but only with Pro. The Preview node shows live results on the canvas as you
 7. Smart Loop Grid widget in Elementor
 
 == Changelog ==
+
+= 1.3.4 =
+
+* Added Onboarding Experience for new users. 
+* Added 4 new import presets for new users. 
+* Added dismissible starter notice on plugin page. 
+* Added Modal for 'Your First Query' in Gutenberg and Elementor. 
+
+= 1.3.3 =
+
+* Added optional **query result caching** (Free) — cache rendered HTML and AJAX pagination payloads with transients; Target node controls TTL and manual flush; registry + FIFO eviction; cache bypass for administrators, WP_DEBUG, and the `query_forge_bypass_query_cache` filter; content saves clear cached results.
+* **Parser:** `get_query()` now takes explicit page and posts-per-page arguments (no reliance on `$_GET` inside the parser).
+* **Frontend Search** — Search field (title, content, or both), bar position (above, below, or both), and alignment from the **Gutenberg block sidebar** or **Elementor widget panel** (not the query graph); `get_query()` accepts optional `s` / `search_columns` (WordPress 6.2+); dedicated `qf_search` AJAX handler; instances with search enabled skip query-result cache; `data-qf-instance-id` root carries search metadata; `qf-widget.js` debounces input and coordinates AJAX pagination with search.
+* **Requires WordPress 6.2+** for `search_columns` support used by frontend search.
+
+= 1.3.2 =
+
+* fixed small bugs and documentation errors. 
 
 = 1.3.1 =
 * Fixes Pagination (block) — Fixes missing page links (correct total page count when WordPress reports max_num_pages as 0, better base URL and current page on static/singular pages).

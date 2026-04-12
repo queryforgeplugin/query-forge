@@ -23,6 +23,43 @@ if ( ! defined( 'ABSPATH' ) ) {
 class QF_Query_Parser {
 
 	/**
+	 * Posts per page from schema target (fallback: site default).
+	 *
+	 * @since 1.3.3
+	 * @param string $json_data Logic JSON.
+	 * @return int>=1
+	 */
+	public static function resolve_posts_per_page_for_query( $json_data ) {
+		$data = json_decode( (string) $json_data, true );
+		if ( is_array( $data ) && ! empty( $data['target']['posts_per_page'] ) ) {
+			return max( 1, absint( $data['target']['posts_per_page'] ) );
+		}
+		return max( 1, (int) get_option( 'posts_per_page' ) );
+	}
+
+	/**
+	 * Current page from request (paged query arg / query vars on singular).
+	 *
+	 * @since 1.3.3
+	 * @return int>=1
+	 */
+	public static function resolve_request_paged() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pagination parameter.
+		if ( isset( $_GET['paged'] ) ) {
+			return max( 1, absint( wp_unslash( $_GET['paged'] ) ) );
+		}
+		$qv = get_query_var( 'paged' );
+		if ( $qv ) {
+			return max( 1, absint( $qv ) );
+		}
+		$qv = get_query_var( 'page' );
+		if ( $qv ) {
+			return max( 1, absint( $qv ) );
+		}
+		return 1;
+	}
+
+	/**
 	 * Active join filters (for cleanup)
 	 * Format: ['filter_id' => ['table' => '...', 'alias' => '...', 'priority' => 10]]
 	 *
@@ -70,11 +107,15 @@ class QF_Query_Parser {
 	 * Get WP_Query object from JSON schema
 	 *
 	 * @since 1.0.0
-	 * @param string $json_data JSON schema string.
+	 * @param string   $json_data       JSON schema string.
+	 * @param int|null $paged           Page number (>=1). Default 1. Do not read from $_GET here.
+	 * @param int|null $posts_per_page  Override target posts_per_page when set.
+	 * @param array|null $extra_args    Optional. Merged immediately before each `WP_Query`. Only `s` and
+	 *                                  `search_columns` are applied; `$extra_args` wins on key conflict (since 1.3.3).
 	 * @return \WP_Query|QF_Query_Result_Wrapper Query object or wrapper for non-post queries.
 	 * @throws \Exception If query parsing fails.
 	 */
-	public static function get_query( $json_data ) {
+	public static function get_query( $json_data, $paged = null, $posts_per_page = null, $extra_args = null ) {
 		// Detect if we're in Elementor preview/editor mode or on frontend.
 		$is_preview = false;
 		if ( class_exists( '\Elementor\Plugin' ) && \Elementor\Plugin::$instance->editor && \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
@@ -93,10 +134,15 @@ class QF_Query_Parser {
 		}
 
 		try {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- $_GET['paged'] is a public pagination parameter, not form data.
-			$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+			if ( null === $paged ) {
+				$paged = 1;
+			}
+			$paged = max( 1, absint( $paged ) );
 
 			$query_args = self::build_query_args( $data );
+			if ( null !== $posts_per_page ) {
+				$query_args['posts_per_page'] = max( 1, absint( $posts_per_page ) );
+			}
 			$source_type = $query_args['_qf_source_type'] ?? 'post_type';
 
 			if ( ! empty( $query_args['post_type'] ) && 'post_type' === $source_type ) {
@@ -134,6 +180,7 @@ class QF_Query_Parser {
 			if ( ! $has_query ) {
 				// query absent or empty: no restriction — plain WP_Query with source + target pagination.
 				$query_args['paged'] = $paged;
+				$query_args          = self::merge_search_extra_args( $query_args, $extra_args );
 				$query = new \WP_Query( $query_args );
 				self::remove_join_filters();
 				self::remove_where_filters();
@@ -146,6 +193,7 @@ class QF_Query_Parser {
 			unset( $final_args['_qf_where_filters'] );
 			$final_args['post__in'] = ! empty( $post_ids ) ? array_map( 'absint', $post_ids ) : [ 0 ];
 			$final_args['paged']   = $paged;
+			$final_args            = self::merge_search_extra_args( $final_args, $extra_args );
 
 			$query = new \WP_Query( $final_args );
 
@@ -160,6 +208,36 @@ class QF_Query_Parser {
 			// Return empty query.
 			return self::get_empty_query();
 		}
+	}
+
+	/**
+	 * Merge frontend search args into query args immediately before WP_Query.
+	 *
+	 * @since 1.3.3
+	 * @param array      $query_args Query arguments.
+	 * @param array|null $extra_args Optional `s` and `search_columns` (WordPress 6.2+).
+	 * @return array
+	 */
+	private static function merge_search_extra_args( array $query_args, $extra_args ) {
+		if ( empty( $extra_args ) || ! is_array( $extra_args ) ) {
+			return $query_args;
+		}
+		if ( array_key_exists( 's', $extra_args ) ) {
+			$query_args['s'] = $extra_args['s'];
+		}
+		if ( ! empty( $extra_args['search_columns'] ) && is_array( $extra_args['search_columns'] ) ) {
+			$allowed = [ 'post_title', 'post_content', 'post_excerpt' ];
+			$cols    = array_values(
+				array_intersect(
+					array_map( 'sanitize_key', $extra_args['search_columns'] ),
+					$allowed
+				)
+			);
+			if ( ! empty( $cols ) ) {
+				$query_args['search_columns'] = $cols;
+			}
+		}
+		return $query_args;
 	}
 
 	/**

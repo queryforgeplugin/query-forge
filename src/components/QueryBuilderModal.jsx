@@ -68,6 +68,32 @@ function applyImplicitEdgeLabels(nodes, edges, schema) {
   });
 }
 
+/**
+ * Replace CPT placeholder from starter preset with first public CPT or "post".
+ *
+ * @param {Array} nodes React Flow nodes from imported graphState.
+ * @returns {Array}
+ */
+function resolveFirstCptPlaceholder(nodes) {
+  const pts = typeof window !== 'undefined' ? window.QueryForgeConfig?.postTypes || [] : [];
+  const excluded = new Set(['post', 'page', 'attachment', 'revision', 'nav_menu_item']);
+  const first = pts.find((p) => p && p.name && !excluded.has(p.name));
+  const resolved = first ? first.name : 'post';
+  return nodes.map((node) => {
+    if (node.type === 'source' && node.data?.postType === '__first_cpt__') {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          sourceType: 'cpts',
+          postType: resolved,
+        },
+      };
+    }
+    return node;
+  });
+}
+
 const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
   // Parse initial data or create default nodes.
   const getInitialNodes = () => {
@@ -92,7 +118,13 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
       {
         id: 'target-1',
         type: 'target',
-        data: { postsPerPage: 10, orderBy: 'date', order: 'DESC', label: 'Query Output' },
+        data: {
+          postsPerPage: 10,
+          orderBy: 'date',
+          order: 'DESC',
+          cacheDuration: 0,
+          label: 'Query Output',
+        },
         position: { x: 600, y: 200 },
       },
     ];
@@ -109,7 +141,13 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
         // Fall through to default edges on parse error.
       }
     }
-    return [];
+    return [
+      {
+        id: 'reactflow__edge-source-1-target-1',
+        source: 'source-1',
+        target: 'target-1',
+      },
+    ];
   };
 
   const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
@@ -121,7 +159,38 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
   const [savedQueries, setSavedQueries] = useState([]);
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [upsellModal, setUpsellModal] = useState({ isOpen: false, featureName: '', description: '' });
-  
+  const [showOnboarding, setShowOnboarding] = useState(!!window.QueryForgeConfig?.showOnboarding);
+
+  const completeOnboarding = useCallback(async () => {
+    const ajaxUrl = window.QueryForgeConfig?.ajaxUrl;
+    const nonce = window.QueryForgeConfig?.nonce || '';
+    if (ajaxUrl && nonce) {
+      try {
+        await fetch(ajaxUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ action: 'qf_complete_onboarding', nonce }),
+        });
+      } catch (e) {
+        // Still close modal if network fails.
+      }
+    }
+    setShowOnboarding(false);
+  }, []);
+
+  useEffect(() => {
+    if (!showOnboarding) {
+      return undefined;
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        completeOnboarding();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showOnboarding, completeOnboarding]);
+
   // Free version - Pro features are not available
 
   const onConnect = useCallback(
@@ -363,7 +432,12 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
       sort: { field: 'date', direction: 'DESC', label: 'Sort' },
       inclusionExclusion: { postIn: '', postNotIn: '', authorIn: '', authorNotIn: '', ignoreStickyPosts: true, label: 'Include/Exclude' },
       logic: { relation: 'AND', label: 'Logic' },
-      target: { postsPerPage: 10, orderBy: 'date', order: 'DESC', label: 'Query Output' },
+      target: {
+        postsPerPage: 10,
+        orderBy: 'date',
+        order: 'DESC',
+        label: 'Query Output',
+      },
     };
 
     const newNode = {
@@ -811,6 +885,7 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
               onUpdate={handleUpdateNode}
               onClose={() => setSelectedNode(null)}
               sourceNodes={nodes.filter(n => n.type === 'source')}
+              currentLogicJson={JSON.stringify(transformResult.schema)}
             />
           )}
 
@@ -886,13 +961,13 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
                               // Get graphState and logicJson from saved query.
                               const graphState = query.graphState || '';
                               const logicJson = query.logicJson || '';
-                              
+
                               if (!graphState && !logicJson) {
                                 alert('Error: Saved query has no data to import.');
                                 return;
                               }
-                              
-                              // Parse graphState to get nodes and edges.
+
+                              // Import uses graphState only; logicJson is ignored so the canvas rebuilds schema from nodes/edges.
                               let graphData = null;
                               if (graphState) {
                                 try {
@@ -901,11 +976,11 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
                                   // Silently handle parse errors
                                 }
                               }
-                              
-                              // Update nodes and edges if graphData is available.
+
                               // NOTE: We do NOT call onSave here - user must click "Save Logic" to persist changes.
                               if (graphData && graphData.nodes && graphData.edges) {
-                                setNodes(graphData.nodes);
+                                const withCpt = resolveFirstCptPlaceholder(graphData.nodes);
+                                setNodes(withCpt);
                                 setEdges(graphData.edges);
                               }
                               
@@ -1109,6 +1184,79 @@ const QueryBuilderModal = ({ initialData, onSave, onClose }) => {
         featureName={upsellModal.featureName}
         description={upsellModal.description}
       />
+
+      {showOnboarding && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qf-onboarding-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100000,
+            backgroundColor: 'rgba(26, 32, 44, 0.92)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              color: '#1a202c',
+              borderRadius: '8px',
+              maxWidth: '640px',
+              width: '100%',
+              padding: '28px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+            }}
+          >
+            <h2 id="qf-onboarding-title" style={{ marginTop: 0, marginBottom: '16px', fontSize: '1.35rem' }}>
+              {__('Build Your First Query', 'query-forge')}
+            </h2>
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, marginBottom: '16px' }}>
+              <iframe
+                title={__('Build Your First Query — Query Forge walkthrough', 'query-forge')}
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/LXRdUDTOogA"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 0,
+                }}
+                allowFullScreen
+              />
+            </div>
+            <p style={{ marginBottom: '20px', fontSize: '14px', lineHeight: 1.5 }}>
+              {__(
+                'Your 4 starter queries are ready — find them under Import on the canvas.',
+                'query-forge'
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => completeOnboarding()}
+              style={{
+                background: '#5c4bde',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '10px 22px',
+                fontSize: '15px',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              {__('Got it', 'query-forge')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

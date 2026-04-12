@@ -348,3 +348,116 @@
 	margin-top: 40px;
 	text-align: center;
 }
+
+/* Frontend search (v1.3.3+) */
+.qf-search-bar {
+	margin-bottom: 1rem;
+}
+
+.qf-search-align-left {
+	text-align: left;
+}
+
+.qf-search-align-center {
+	text-align: center;
+}
+
+.qf-search-align-center .qf-search-branded-track,
+.qf-search-align-center .qf-search-input {
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.qf-search-align-right {
+	text-align: right;
+}
+
+.qf-search-align-right .qf-search-branded-track,
+.qf-search-align-right .qf-search-input {
+	margin-left: auto;
+}
+
+.qf-search-input {
+	width: 100%;
+	max-width: 28rem;
+	padding: 0.55rem 0.75rem;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	font-size: 1rem;
+	box-sizing: border-box;
+}
+
+.qf-search-input::placeholder {
+	color: var(--qf-placeholder-color, inherit);
+	opacity: 0.72;
+}
+
+.qf-search-input:focus {
+	outline: 2px solid var(--qf-focus-ring, #2271b1);
+	outline-offset: 2px;
+}
+
+/* Branded: icon inside left, heavier border on input */
+.qf-search-branded .qf-search-branded-track {
+	position: relative;
+	width: 100%;
+	max-width: 28rem;
+}
+
+.qf-search-branded .qf-search-icon {
+	position: absolute;
+	left: 0.65rem;
+	top: 50%;
+	transform: translateY(-50%);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	z-index: 1;
+	color: #50575e;
+}
+
+.qf-search-branded .qf-search-icon-svg {
+	display: block;
+	vertical-align: middle;
+}
+
+.qf-search-branded .qf-search-input {
+	padding-left: 2.35rem;
+	border-width: 2px;
+	border-style: solid;
+	border-color: #8c8f94;
+}
+
+/* Minimal */
+.qf-search-minimal .qf-search-input {
+	max-width: 28rem;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	background: transparent;
+}
+
+/* Floating */
+.qf-search-floating .qf-search-input {
+	max-width: 28rem;
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	background: #fff;
+}
+
+.qf-search-floating.qf-shadow-light {
+	box-shadow: 0 1px 4px var(--qf-search-shadow-color, rgba(0, 0, 0, 0.08));
+}
+
+.qf-search-floating.qf-shadow-medium {
+	box-shadow: 0 2px 8px var(--qf-search-shadow-color, rgba(0, 0, 0, 0.15));
+}
+
+.qf-search-floating.qf-shadow-strong {
+	box-shadow: 0 4px 16px var(--qf-search-shadow-color, rgba(0, 0, 0, 0.25));
+}
+
+.qf-query-forge-root.qf-is-loading,
+[data-qf-instance-id].qf-is-loading {
+	opacity: 0.65;
+	pointer-events: none;
+	transition: opacity 0.2s ease;
+}

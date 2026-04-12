@@ -60,7 +60,10 @@ final class Plugin {
 	private function includes() {
 		require_once QUERY_FORGE_PATH . 'includes/class-qf-query-parser.php';
 		require_once QUERY_FORGE_PATH . 'includes/class-qf-query-result-wrapper.php';
+		require_once QUERY_FORGE_PATH . 'includes/class-qf-query-cache.php';
+		require_once QUERY_FORGE_PATH . 'includes/class-qf-frontend-search.php';
 		require_once QUERY_FORGE_PATH . 'includes/class-qf-block.php';
+		require_once QUERY_FORGE_PATH . 'includes/class-qf-starter-queries.php';
 	}
 
 	/**
@@ -83,6 +86,14 @@ final class Plugin {
 		add_action( 'wp_ajax_query_forge_delete_query', [ $this, 'ajax_delete_query' ] );
 		add_action( 'wp_ajax_query_forge_load_more_posts', [ $this, 'ajax_load_more_posts' ] );
 		add_action( 'wp_ajax_nopriv_query_forge_load_more_posts', [ $this, 'ajax_load_more_posts' ] );
+		add_action( 'wp_ajax_qf_search', [ $this, 'ajax_qf_search' ] );
+		add_action( 'wp_ajax_nopriv_qf_search', [ $this, 'ajax_qf_search' ] );
+		add_action( 'wp_ajax_query_forge_flush_block_cache', [ $this, 'ajax_flush_block_cache' ] );
+		add_action( 'wp_ajax_qf_dismiss_notice', [ $this, 'ajax_qf_dismiss_notice' ] );
+		add_action( 'wp_ajax_qf_complete_onboarding', [ $this, 'ajax_qf_complete_onboarding' ] );
+		add_action( 'admin_notices', [ $this, 'render_activation_admin_notice' ] );
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_notice_dismiss' ] );
+		add_action( 'save_post', [ $this, 'invalidate_query_caches_on_save' ], 10, 2 );
 	}
 
 	/**
@@ -154,12 +165,13 @@ final class Plugin {
 			'query_forge_editor',
 			'QueryForgeConfig',
 			[
-				'postTypes' => $this->get_post_types_for_localize(),
-				'userRoles' => $this->get_user_roles_for_localize(),
-				'assetsUrl' => QUERY_FORGE_URL . 'assets/',
-				'nonce'     => wp_create_nonce( 'query_forge_nonce' ),
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'version'   => QUERY_FORGE_VERSION,
+				'postTypes'       => $this->get_post_types_for_localize(),
+				'userRoles'       => $this->get_user_roles_for_localize(),
+				'assetsUrl'       => QUERY_FORGE_URL . 'assets/',
+				'nonce'           => wp_create_nonce( 'query_forge_nonce' ),
+				'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+				'version'         => QUERY_FORGE_VERSION,
+				'showOnboarding'  => ! (bool) get_option( 'qf_onboarding_complete', false ),
 			]
 		);
 
@@ -203,12 +215,13 @@ final class Plugin {
 			'query_forge_block',
 			'QueryForgeConfig',
 			[
-				'postTypes' => $this->get_post_types_for_localize(),
-				'userRoles' => $this->get_user_roles_for_localize(),
-				'assetsUrl' => QUERY_FORGE_URL . 'assets/',
-				'nonce'     => wp_create_nonce( 'query_forge_nonce' ),
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'version'   => QUERY_FORGE_VERSION,
+				'postTypes'       => $this->get_post_types_for_localize(),
+				'userRoles'       => $this->get_user_roles_for_localize(),
+				'assetsUrl'       => QUERY_FORGE_URL . 'assets/',
+				'nonce'           => wp_create_nonce( 'query_forge_nonce' ),
+				'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+				'version'         => QUERY_FORGE_VERSION,
+				'showOnboarding'  => ! (bool) get_option( 'qf_onboarding_complete', false ),
 			]
 		);
 
@@ -295,6 +308,63 @@ final class Plugin {
 	}
 
 	/**
+	 * Dismissible activation notice (Query Forge active + starter queries).
+	 */
+	public function render_activation_admin_notice() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+		if ( get_option( 'qf_notice_dismissed', false ) ) {
+			return;
+		}
+		?>
+		<div class="notice notice-info is-dismissible qf-query-forge-activation-notice" data-nonce="<?php echo esc_attr( wp_create_nonce( 'query_forge_nonce' ) ); ?>">
+			<p><?php esc_html_e( 'Query Forge is active. Open the block editor or Elementor, add a Query Forge block or widget, and find your 4 starter queries under Import on the canvas.', 'query-forge' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Inline script: persist admin notice dismissal.
+	 *
+	 * @param string $hook_suffix Current admin page.
+	 */
+	public function enqueue_admin_notice_dismiss( $hook_suffix ) {
+		if ( get_option( 'qf_notice_dismissed', false ) ) {
+			return;
+		}
+		wp_enqueue_script( 'jquery' );
+		$script = sprintf(
+			'jQuery(function($){$(document).on("click",".qf-query-forge-activation-notice .notice-dismiss",function(){var n=$(this).closest(".qf-query-forge-activation-notice").data("nonce");$.post(ajaxurl,{action:"qf_dismiss_notice",nonce:n});});});'
+		);
+		wp_add_inline_script( 'jquery', $script );
+	}
+
+	/**
+	 * AJAX: dismiss activation notice.
+	 */
+	public function ajax_qf_dismiss_notice() {
+		check_ajax_referer( 'query_forge_nonce', 'nonce' );
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'query-forge' ) ] );
+		}
+		update_option( 'qf_notice_dismissed', 1, false );
+		wp_send_json_success();
+	}
+
+	/**
+	 * AJAX: first-run onboarding modal completed.
+	 */
+	public function ajax_qf_complete_onboarding() {
+		check_ajax_referer( 'query_forge_nonce', 'nonce' );
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'query-forge' ) ] );
+		}
+		update_option( 'qf_onboarding_complete', 1, false );
+		wp_send_json_success();
+	}
+
+	/**
 	 * Enqueue Widget Styles
 	 *
 	 * @since 1.0.0
@@ -316,10 +386,7 @@ final class Plugin {
 		wp_localize_script(
 			'query_forge_widget',
 			'QueryForgeWidget',
-			[
-				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'query_forge_nonce' ),
-			]
+			\Query_Forge\QF_Frontend_Search::get_widget_script_data()
 		);
 	}
 
@@ -725,63 +792,156 @@ final class Plugin {
 		}
 		$widget_settings = $this->sanitize_load_more_widget_settings( $widget_settings_raw );
 
-		// Set paged in GET for query parser
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.VIP.SuperGlobalInputUsage.AccessDetected -- Internal pagination parameter, already sanitized via absint().
-		$_GET['paged'] = $paged;
+		$search_enabled_req = $this->ajax_request_search_enabled();
+		$extra_args         = null;
+		$search_filter_applied = false;
 
-		// Execute query
-		$query = \Query_Forge\QF_Query_Parser::get_query( $logic_json );
-
-		if ( ! $query || ( method_exists( $query, 'have_posts' ) && ! $query->have_posts() ) ) {
-			wp_send_json_error( [ 'message' => __( 'No more posts found.', 'query-forge' ) ] );
+		if ( $search_enabled_req ) {
+			$search_term = \Query_Forge\QF_Frontend_Search::sanitize_search_term( isset( $_POST['search_term'] ) ? $_POST['search_term'] : '' );
+			$field_raw   = isset( $_POST['search_field'] ) ? sanitize_text_field( wp_unslash( $_POST['search_field'] ) ) : 'title';
+			$search_field = in_array( $field_raw, [ 'title', 'content', 'title_content' ], true ) ? $field_raw : 'title';
+			$extra_args     = \Query_Forge\QF_Frontend_Search::extra_args_for_search( $search_term, $search_field );
+			$search_filter_applied = ( null !== $extra_args );
 		}
 
-		// Render posts HTML
+		$ppp        = \Query_Forge\QF_Query_Parser::resolve_posts_per_page_for_query( $logic_json );
+		$ttl        = \Query_Forge\QF_Query_Cache::get_cache_ttl_from_logic( $logic_json );
+		$logic_hash = \Query_Forge\QF_Query_Cache::logic_hash( $logic_json );
+		$ctx_hash   = md5( $widget_settings_json );
+		$cache_key  = \Query_Forge\QF_Query_Cache::build_cache_key( $logic_json, $paged, $ppp, $ctx_hash, 'ajax' );
+
+		if ( $ttl > 0 && ! \Query_Forge\QF_Query_Cache::should_bypass() && ! $search_enabled_req ) {
+			$cached_payload = \Query_Forge\QF_Query_Cache::get_array( $cache_key, $logic_hash );
+			if ( is_array( $cached_payload ) ) {
+				wp_send_json_success( $cached_payload );
+			}
+		}
+
+		$query = \Query_Forge\QF_Query_Parser::get_query( $logic_json, $paged, $ppp, $extra_args );
+
+		if ( ! $query || ! method_exists( $query, 'have_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'No more posts found.', 'query-forge' ) ] );
+			return;
+		}
+
+		if ( ! $query->have_posts() && ! $search_enabled_req ) {
+			wp_send_json_error( [ 'message' => __( 'No more posts found.', 'query-forge' ) ] );
+			return;
+		}
+
+		$payload = $this->compose_ajax_grid_payload( $query, $paged, $ppp, $widget_settings, $search_filter_applied );
+
+		if ( $ttl > 0 && ! \Query_Forge\QF_Query_Cache::should_bypass() && ! $search_enabled_req ) {
+			\Query_Forge\QF_Query_Cache::set_array( $cache_key, $logic_hash, $payload, $ttl );
+		}
+
+		wp_send_json_success( $payload );
+	}
+
+	/**
+	 * AJAX: flush cached HTML/payloads for a logic JSON graph.
+	 *
+	 * @since 1.3.3
+	 */
+	public function ajax_flush_block_cache() {
+		check_ajax_referer( 'query_forge_nonce', 'nonce' );
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Forbidden.', 'query-forge' ) ] );
+		}
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Validated via logic_hash length / json_decode in cache layer.
+		$logic_json = isset( $_POST['logic_json'] ) ? wp_unslash( $_POST['logic_json'] ) : '';
+		if ( ! is_string( $logic_json ) || '' === $logic_json ) {
+			wp_send_json_error( [ 'message' => __( 'Missing query data.', 'query-forge' ) ] );
+		}
+		$check = json_decode( $logic_json, true );
+		if ( json_last_error() !== JSON_ERROR_NONE || ! is_array( $check ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid query data.', 'query-forge' ) ] );
+		}
+		\Query_Forge\QF_Query_Cache::flush_by_logic_hash( \Query_Forge\QF_Query_Cache::logic_hash( $logic_json ) );
+		wp_send_json_success( [ 'message' => __( 'Cache cleared.', 'query-forge' ) ] );
+	}
+
+	/**
+	 * Invalidate query result caches when any post is saved.
+	 *
+	 * @since 1.3.3
+	 * @param int     $post_id Post ID.
+	 * @param \WP_Post $post   Post object.
+	 */
+	public function invalidate_query_caches_on_save( $post_id, $post ) {
+		unset( $post );
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+		\Query_Forge\QF_Query_Cache::flush_all();
+	}
+
+	/**
+	 * Shared AJAX response for grid HTML, pagination fragment, and optional results summary.
+	 *
+	 * @since 1.3.3
+	 * @param \WP_Query $query           Query object.
+	 * @param int       $paged           Current page.
+	 * @param int       $ppp             Posts per page fallback.
+	 * @param array     $widget_settings Sanitized widget settings.
+	 * @param bool      $search_active   Whether frontend search filter is active.
+	 * @return array<string, mixed>
+	 */
+	private function compose_ajax_grid_payload( $query, $paged, $ppp, array $widget_settings, $search_active = false ) {
 		ob_start();
-		
+
 		$display_type = ! empty( $widget_settings['display_type'] ) ? $widget_settings['display_type'] : 'canned';
-		
-		if ( 'template' === $display_type && ! empty( $widget_settings['elementor_template_id'] ) && class_exists( '\Elementor\Plugin' ) ) {
-			$template_id = absint( $widget_settings['elementor_template_id'] );
-			$elementor_instance = \Elementor\Plugin::instance();
-			if ( $elementor_instance->frontend ) {
+
+		if ( $query->have_posts() ) {
+			if ( 'template' === $display_type && ! empty( $widget_settings['elementor_template_id'] ) && class_exists( '\Elementor\Plugin' ) ) {
+				$template_id        = absint( $widget_settings['elementor_template_id'] );
+				$elementor_instance = \Elementor\Plugin::instance();
+				if ( $elementor_instance->frontend ) {
+					while ( $query->have_posts() ) {
+						$query->the_post();
+						?>
+						<div class="qf-template-item">
+							<?php
+							$content = $elementor_instance->frontend->get_builder_content_for_display( $template_id );
+							if ( $content ) {
+								echo wp_kses_post( $content );
+							}
+							?>
+						</div>
+						<?php
+					}
+				}
+			} else {
+				$card_style = ! empty( $widget_settings['card_style'] ) ? $widget_settings['card_style'] : 'vertical';
 				while ( $query->have_posts() ) {
 					$query->the_post();
-					?>
-					<div class="qf-template-item">
-						<?php
-						$content = $elementor_instance->frontend->get_builder_content_for_display( $template_id );
-						if ( $content ) {
-							echo wp_kses_post( $content );
-						}
-						?>
-					</div>
-					<?php
+					$this->render_card_html( $widget_settings, $card_style );
 				}
 			}
 		} else {
-			// Use inline rendering for cards
-			$card_style = ! empty( $widget_settings['card_style'] ) ? $widget_settings['card_style'] : 'vertical';
-			while ( $query->have_posts() ) {
-				$query->the_post();
-				$this->render_card_html( $widget_settings, $card_style );
-			}
+			echo '<div class="qf-placeholder qf-search-empty"><p>' . esc_html__( 'No results found.', 'query-forge' ) . '</p></div>';
 		}
-		
+
 		wp_reset_postdata();
-		
+
 		$html = ob_get_clean();
-		
-		// Check if there are more pages
-		$max_pages = $query->max_num_pages ?? 1;
+
+		$max_pages = isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 0;
+		if ( $max_pages < 1 ) {
+			$found = isset( $query->found_posts ) ? (int) $query->found_posts : 0;
+			$per   = (int) $query->get( 'posts_per_page' );
+			if ( $per <= 0 ) {
+				$per = max( 1, $ppp );
+			}
+			$max_pages = $found > 0 ? max( 1, (int) ceil( $found / $per ) ) : 1;
+		}
 		$has_more = $paged < $max_pages;
 
-		// Regenerate pagination link HTML for any AJAX page change (standard or ajax pagination type).
 		$pagination_html = '';
 		global $wp;
 		$current_url = home_url( add_query_arg( [], $wp->request ) );
-		$base = remove_query_arg( 'paged', $current_url );
-		$base = trailingslashit( $base );
+		$base        = remove_query_arg( 'paged', $current_url );
+		$base        = trailingslashit( $base );
 		if ( strpos( $base, '?' ) !== false ) {
 			$format = '&paged=%#%';
 		} else {
@@ -790,10 +950,6 @@ final class Plugin {
 
 		$prev_text = ! empty( $widget_settings['pagination_prev_text'] ) ? $widget_settings['pagination_prev_text'] : __( '&laquo; Previous', 'query-forge' );
 		$next_text = ! empty( $widget_settings['pagination_next_text'] ) ? $widget_settings['pagination_next_text'] : __( 'Next &raquo;', 'query-forge' );
-
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- $_GET['paged'] is a public pagination parameter, already sanitized via absint() above.
-		$original_paged = isset( $_GET['paged'] ) ? wp_unslash( $_GET['paged'] ) : null;
-		$_GET['paged'] = $paged;
 
 		$pagination = paginate_links(
 			[
@@ -806,20 +962,13 @@ final class Plugin {
 			]
 		);
 
-		if ( null !== $original_paged ) {
-			$_GET['paged'] = $original_paged;
-		} else {
-			unset( $_GET['paged'] );
-		}
-
 		if ( $pagination ) {
 			$pagination_html = wp_kses_post( $pagination );
 		}
 
-		// Results summary ("Showing X–Y of Z") for AJAX refresh
 		$results_summary_html = '';
 		if ( ! empty( $widget_settings['show_results_summary'] ) && 'yes' === $widget_settings['show_results_summary'] ) {
-			$total = (int) $query->found_posts;
+			$total    = (int) $query->found_posts;
 			$per_page = 0;
 			if ( is_object( $query ) && method_exists( $query, 'get' ) ) {
 				$per_page = (int) $query->get( 'posts_per_page' );
@@ -833,7 +982,6 @@ final class Plugin {
 			$start = ( ( $paged - 1 ) * $per_page ) + 1;
 			$end   = min( $paged * $per_page, $total );
 			if ( $total > 0 && $start <= $end ) {
-				/* translators: 1: first result number, 2: last result number, 3: total results. */
 				$text = sprintf(
 					esc_html__( 'Showing %1$d–%2$d of %3$d results', 'query-forge' ),
 					$start,
@@ -844,7 +992,7 @@ final class Plugin {
 			}
 		}
 
-		wp_send_json_success( [
+		return [
 			'html'                 => $html,
 			'has_more'             => $has_more,
 			'next_page'            => $has_more ? $paged + 1 : null,
@@ -852,7 +1000,74 @@ final class Plugin {
 			'max_pages'            => $max_pages,
 			'pagination_html'      => $pagination_html,
 			'results_summary_html' => $results_summary_html,
-		] );
+			'search_active'        => $search_active ? '1' : '0',
+		];
+	}
+
+	/**
+	 * AJAX: frontend search / grid refresh (no query-result cache).
+	 *
+	 * @since 1.3.3
+	 */
+	public function ajax_qf_search() {
+		check_ajax_referer( 'query_forge_nonce', 'nonce' );
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON validated below.
+		$logic_json_raw = isset( $_POST['logic_json'] ) ? wp_unslash( $_POST['logic_json'] ) : '';
+		$paged          = isset( $_POST['paged'] ) ? max( 1, absint( $_POST['paged'] ) ) : 1;
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON validated below.
+		$widget_settings_json = isset( $_POST['widget_settings'] ) ? wp_unslash( $_POST['widget_settings'] ) : '';
+
+		if ( empty( $logic_json_raw ) || ! is_string( $logic_json_raw ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid query data.', 'query-forge' ) ] );
+			return;
+		}
+
+		$logic_decoded = json_decode( $logic_json_raw, true );
+		if ( json_last_error() !== JSON_ERROR_NONE || ! is_array( $logic_decoded ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid query data.', 'query-forge' ) ] );
+			return;
+		}
+		$logic_json = $logic_json_raw;
+
+		if ( ! $this->ajax_request_search_enabled() ) {
+			wp_send_json_error( [ 'message' => __( 'Search is not enabled for this block or widget.', 'query-forge' ) ] );
+			return;
+		}
+
+		$widget_settings_raw = json_decode( $widget_settings_json, true );
+		if ( json_last_error() !== JSON_ERROR_NONE || ! is_array( $widget_settings_raw ) ) {
+			$widget_settings_raw = [];
+		}
+		$widget_settings = $this->sanitize_load_more_widget_settings( $widget_settings_raw );
+
+		$search_term  = \Query_Forge\QF_Frontend_Search::sanitize_search_term( isset( $_POST['search_term'] ) ? $_POST['search_term'] : '' );
+		$field_raw    = isset( $_POST['search_field'] ) ? sanitize_text_field( wp_unslash( $_POST['search_field'] ) ) : 'title';
+		$search_field = in_array( $field_raw, [ 'title', 'content', 'title_content' ], true ) ? $field_raw : 'title';
+
+		$extra_args    = \Query_Forge\QF_Frontend_Search::extra_args_for_search( $search_term, $search_field );
+		$search_active = ( null !== $extra_args );
+		$ppp            = \Query_Forge\QF_Query_Parser::resolve_posts_per_page_for_query( $logic_json );
+		$query          = \Query_Forge\QF_Query_Parser::get_query( $logic_json, $paged, $ppp, $extra_args );
+
+		if ( ! $query || ! method_exists( $query, 'have_posts' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Could not run query.', 'query-forge' ) ] );
+			return;
+		}
+
+		$payload = $this->compose_ajax_grid_payload( $query, $paged, $ppp, $widget_settings, $search_active );
+		wp_send_json_success( $payload );
+	}
+
+	/**
+	 * Whether the client declares search enabled for this instance (POST).
+	 *
+	 * @since 1.3.3
+	 * @return bool
+	 */
+	private function ajax_request_search_enabled() {
+		$raw = isset( $_POST['search_enabled'] ) ? wp_unslash( $_POST['search_enabled'] ) : false;
+		return filter_var( $raw, FILTER_VALIDATE_BOOLEAN ) === true;
 	}
 
 	/**

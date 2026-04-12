@@ -31,7 +31,7 @@ function getTaxonomyValueSegment(value) {
   return seg.trim();
 }
 
-const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
+const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [], currentLogicJson = '' }) => {
   const [upsellModal, setUpsellModal] = useState({ isOpen: false, featureName: '', description: '' });
   const [settings, setSettings] = useState(node?.data || {});
   const [fields, setFields] = useState([]); // All fields: standard + taxonomy + meta
@@ -899,6 +899,33 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
     </div>
   );
 
+  const flushQueryCache = () => {
+    const cfg = typeof window !== 'undefined' ? window.QueryForgeConfig || {} : {};
+    const ajaxUrl = cfg.ajaxUrl;
+    const nonce = cfg.nonce || '';
+    if (!ajaxUrl || !currentLogicJson) {
+      return;
+    }
+    fetch(ajaxUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        action: 'query_forge_flush_block_cache',
+        nonce,
+        logic_json: currentLogicJson,
+      }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success) {
+          alert(__('Cached results for this query were cleared.', 'query-forge'));
+        } else {
+          alert(res.data?.message || __('Could not clear cache.', 'query-forge'));
+        }
+      })
+      .catch(() => alert(__('Could not clear cache.', 'query-forge')));
+  };
+
   const renderTargetSettings = () => (
     <div>
       <label style={{ display: 'block', marginBottom: '10px' }}>
@@ -911,6 +938,47 @@ const NodeSettingsPanel = ({ node, onUpdate, onClose, sourceNodes = [] }) => {
           style={{ width: '100%', padding: '5px', marginTop: '5px' }}
         />
       </label>
+      <label style={{ display: 'block', marginBottom: '10px' }}>
+        {__('Result cache (Free)', 'query-forge')}
+        <select
+          value={settings.cacheDuration != null ? String(settings.cacheDuration) : '0'}
+          onChange={(e) =>
+            setSettings({ ...settings, cacheDuration: parseInt(e.target.value, 10) || 0 })
+          }
+          style={{ width: '100%', padding: '5px', marginTop: '5px' }}
+        >
+          <option value="0">{__('Off', 'query-forge')}</option>
+          <option value="60">{__('1 minute', 'query-forge')}</option>
+          <option value="300">{__('5 minutes', 'query-forge')}</option>
+          <option value="900">{__('15 minutes', 'query-forge')}</option>
+          <option value="3600">{__('1 hour', 'query-forge')}</option>
+        </select>
+      </label>
+      <div style={{ fontSize: '12px', color: '#a0aec0', marginBottom: '10px' }}>
+        {__(
+          'Caches rendered HTML for faster loads. Cleared when you publish or update a post. Admins and WP_DEBUG always see fresh results.',
+          'query-forge'
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          flushQueryCache();
+        }}
+        style={{
+          width: '100%',
+          padding: '8px',
+          background: '#2d3748',
+          color: '#fff',
+          border: '1px solid #4a5568',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          marginBottom: '10px',
+        }}
+      >
+        {__('Clear result cache now', 'query-forge')}
+      </button>
       <label style={{ display: 'block', marginBottom: '10px' }}>
         Order By:
         <select

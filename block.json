@@ -1,6 +1,6 @@
 {
 	"$schema": "https://schemas.wp.org/trunk/block.json",
-	"apiVersion": 2,
+	"apiVersion": 3,
 	"name": "query-forge/builder",
 	"title": "Query Forge",
 	"category": "widgets",
@@ -91,6 +91,22 @@
 		"resultsSummaryLetterSpacing": { "type": "string", "default": "" },
 		"resultsSummaryTextTransform": { "type": "string", "default": "" },
 		"paginationPrevText": { "type": "string", "default": "" },
-		"paginationNextText": { "type": "string", "default": "" }
+		"paginationNextText": { "type": "string", "default": "" },
+		"searchEnabled": { "type": "boolean", "default": false },
+		"searchPosition": { "type": "string", "default": "above" },
+		"searchAlignment": { "type": "string", "default": "left" },
+		"searchField": { "type": "string", "default": "title" },
+		"searchStyle": { "type": "string", "default": "branded" },
+		"searchInputTextColor": { "type": "string", "default": "" },
+		"searchPlaceholderColor": { "type": "string", "default": "" },
+		"searchInputBgColor": { "type": "string", "default": "" },
+		"searchInputFontSize": { "type": "integer", "default": 0 },
+		"searchBorderRadius": { "type": "integer", "default": 0 },
+		"searchFocusRingColor": { "type": "string", "default": "" },
+		"searchIconColor": { "type": "string", "default": "" },
+		"searchBorderColor": { "type": "string", "default": "" },
+		"searchBorderWidth": { "type": "integer", "default": 0 },
+		"searchShadowColor": { "type": "string", "default": "" },
+		"searchShadowIntensity": { "type": "string", "default": "medium" }
 	}
 }

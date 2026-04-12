@@ -55,6 +55,7 @@ export function transformToSchema(nodes, edges) {
       posts_per_page: 10,
       orderby: 'date',
       order: 'DESC',
+      cache_duration: 0,
     },
   };
 
@@ -137,6 +138,10 @@ export function transformToSchema(nodes, edges) {
     }
     if (outputNode.data?.postsPerPage) {
       schema.target.posts_per_page = parseInt(outputNode.data.postsPerPage, 10) || 10;
+    }
+    if (outputNode.data && Object.prototype.hasOwnProperty.call(outputNode.data, 'cacheDuration')) {
+      const cd = parseInt(outputNode.data.cacheDuration, 10);
+      schema.target.cache_duration = Number.isFinite(cd) && cd >= 0 ? cd : 0;
     }
   }
 

@@ -19,6 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
+use Query_Forge\QF_Frontend_Search;
+use Query_Forge\QF_Query_Cache;
 use Query_Forge\QF_Query_Parser;
 
 /**
@@ -729,6 +731,245 @@ class Smart_Loop_Grid extends Widget_Base {
 
 		$this->end_controls_section();
 
+		// Search (frontend — block/widget panels; not in query graph JSON).
+		$this->start_controls_section(
+			'section_search',
+			[
+				'label' => __( 'Search', 'query-forge' ),
+				'tab'   => Controls_Manager::TAB_CONTENT,
+			]
+		);
+
+		$this->add_control(
+			'search_enabled',
+			[
+				'label'   => __( 'Show search field', 'query-forge' ),
+				'type'    => Controls_Manager::SWITCHER,
+				'default' => '',
+			]
+		);
+
+		$this->add_control(
+			'search_position',
+			[
+				'label'     => __( 'Position', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'above',
+				'options'   => [
+					'above' => __( 'Above grid', 'query-forge' ),
+					'below' => __( 'Below grid', 'query-forge' ),
+					'both'  => __( 'Above and below grid', 'query-forge' ),
+				],
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_alignment',
+			[
+				'label'     => __( 'Alignment', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'left',
+				'options'   => [
+					'left'   => __( 'Left', 'query-forge' ),
+					'center' => __( 'Center', 'query-forge' ),
+					'right'  => __( 'Right', 'query-forge' ),
+				],
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_field',
+			[
+				'label'     => __( 'Search field', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'title',
+				'options'   => [
+					'title'         => __( 'Title', 'query-forge' ),
+					'content'       => __( 'Content', 'query-forge' ),
+					'title_content' => __( 'Title and content', 'query-forge' ),
+				],
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_style',
+			[
+				'label'     => __( 'Search bar style', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'branded',
+				'options'   => [
+					'branded'  => __( 'Branded', 'query-forge' ),
+					'minimal'  => __( 'Minimal', 'query-forge' ),
+					'floating' => __( 'Floating', 'query-forge' ),
+				],
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_input_text_color',
+			[
+				'label'     => __( 'Input text color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_placeholder_color',
+			[
+				'label'     => __( 'Placeholder color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_input_bg_color',
+			[
+				'label'     => __( 'Input background color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_input_font_size',
+			[
+				'label'     => __( 'Input font size', 'query-forge' ),
+				'type'      => Controls_Manager::NUMBER,
+				'default'   => 0,
+				'min'       => 0,
+				'max'       => 120,
+				'step'      => 1,
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_border_radius',
+			[
+				'label'     => __( 'Border radius', 'query-forge' ),
+				'type'      => Controls_Manager::NUMBER,
+				'default'   => 0,
+				'min'       => 0,
+				'max'       => 100,
+				'step'      => 1,
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_focus_ring_color',
+			[
+				'label'     => __( 'Focus ring color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_icon_color',
+			[
+				'label'     => __( 'Icon color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+					'search_style'   => 'branded',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_border_color',
+			[
+				'label'     => __( 'Border color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+					'search_style'   => 'branded',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_border_width',
+			[
+				'label'     => __( 'Border width', 'query-forge' ),
+				'type'      => Controls_Manager::NUMBER,
+				'default'   => 0,
+				'min'       => 0,
+				'max'       => 20,
+				'step'      => 1,
+				'condition' => [
+					'search_enabled' => 'yes',
+					'search_style'   => 'branded',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_shadow_color',
+			[
+				'label'     => __( 'Shadow color', 'query-forge' ),
+				'type'      => Controls_Manager::COLOR,
+				'default'   => '',
+				'condition' => [
+					'search_enabled' => 'yes',
+					'search_style'   => 'floating',
+				],
+			]
+		);
+
+		$this->add_control(
+			'search_shadow_intensity',
+			[
+				'label'     => __( 'Shadow intensity', 'query-forge' ),
+				'type'      => Controls_Manager::SELECT,
+				'default'   => 'medium',
+				'options'   => [
+					'light'   => __( 'Light', 'query-forge' ),
+					'medium'  => __( 'Medium', 'query-forge' ),
+					'strong'  => __( 'Strong', 'query-forge' ),
+				],
+				'condition' => [
+					'search_enabled' => 'yes',
+					'search_style'   => 'floating',
+				],
+			]
+		);
+
+		$this->end_controls_section();
+
 		// Content Fields Section.
 		$this->start_controls_section(
 			'section_content_fields',
@@ -1066,32 +1307,33 @@ class Smart_Loop_Grid extends Widget_Base {
 	 */
 	protected function render() {
 		$settings = $this->get_settings_for_display();
-		
-		// Store widget settings in data attribute for JavaScript access
-		$widget_id = $this->get_id();
-		$this->add_render_attribute( 'wrapper', 'data-qf-widget-id', $widget_id );
-		$this->add_render_attribute( 'wrapper', 'data-qf-settings', wp_json_encode( [
-			'logic_json' => $settings['qf_logic_json'] ?? '',
-			'widget_settings' => [
-				'display_type' => $settings['display_type'] ?? 'canned',
-				'card_style' => $settings['card_style'] ?? 'vertical',
-				'show_title' => $settings['show_title'] ?? 'yes',
-				'show_excerpt' => $settings['show_excerpt'] ?? 'yes',
-				'show_image' => $settings['show_image'] ?? 'yes',
-				'show_date' => $settings['show_date'] ?? 'yes',
-				'show_author' => $settings['show_author'] ?? 'yes',
-				'excerpt_length' => $settings['excerpt_length'] ?? 100,
-				'image_size' => $settings['image_size'] ?? 'medium',
-				'elementor_template_id' => $settings['elementor_template_id'] ?? '',
-				'pagination_type' => $settings['pagination_type'] ?? 'standard',
-				'pagination_prev_text' => $settings['pagination_prev_text'] ?? '',
-				'pagination_next_text' => $settings['pagination_next_text'] ?? '',
-				'show_results_summary' => $settings['show_results_summary'] ?? '',
-				'results_summary_position' => $settings['results_summary_position'] ?? 'above_grid',
-			],
-		] ) );
 
-		// Check if query builder is configured.
+		$widget_id = $this->get_id();
+
+		$data_settings = wp_json_encode(
+			[
+				'logic_json'      => $settings['qf_logic_json'] ?? '',
+				'widget_settings' => [
+					'display_type'             => $settings['display_type'] ?? 'canned',
+					'card_style'               => $settings['card_style'] ?? 'vertical',
+					'show_title'               => $settings['show_title'] ?? 'yes',
+					'show_excerpt'             => $settings['show_excerpt'] ?? 'yes',
+					'show_image'               => $settings['show_image'] ?? 'yes',
+					'show_date'                => $settings['show_date'] ?? 'yes',
+					'show_author'              => $settings['show_author'] ?? 'yes',
+					'excerpt_length'           => $settings['excerpt_length'] ?? 100,
+					'image_size'               => $settings['image_size'] ?? 'medium',
+					'elementor_template_id'    => $settings['elementor_template_id'] ?? '',
+					'pagination_type'          => $settings['pagination_type'] ?? 'standard',
+					'pagination_prev_text'     => $settings['pagination_prev_text'] ?? '',
+					'pagination_next_text'     => $settings['pagination_next_text'] ?? '',
+					'show_results_summary'     => $settings['show_results_summary'] ?? '',
+					'results_summary_position' => $settings['results_summary_position'] ?? 'above_grid',
+					'widget_id'                => $widget_id,
+				],
+			]
+		);
+
 		if ( empty( $settings['qf_logic_json'] ) ) {
 			if ( \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
 				echo '<div class="qf-placeholder">';
@@ -1101,12 +1343,44 @@ class Smart_Loop_Grid extends Widget_Base {
 			return;
 		}
 
-		// Get query from parser.
-		$query = QF_Query_Parser::get_query( $settings['qf_logic_json'] );
+		$logic_json   = $settings['qf_logic_json'];
+		$paged        = QF_Query_Parser::resolve_request_paged();
+		$ppp          = QF_Query_Parser::resolve_posts_per_page_for_query( $logic_json );
+		$instance_id  = md5( (string) $logic_json . '|' . $widget_id );
+		$is_edit_mode = \Elementor\Plugin::$instance->editor->is_edit_mode();
+		$search_cfg   = $this->get_search_settings_for_render( $settings );
 
+		$this->add_render_attribute( 'qf_outer', 'class', 'qf-query-forge-root' );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-instance-id', $instance_id );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-widget-id', $widget_id );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-posts-per-page', (string) $ppp );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-current-page', (string) $paged );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-active', '0' );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-enabled', ! empty( $search_cfg['search_enabled'] ) ? '1' : '0' );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-field', $search_cfg['search_field'] );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-position', $search_cfg['search_position'] );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-alignment', $search_cfg['search_alignment'] );
+		$this->add_render_attribute( 'qf_outer', 'data-qf-search-style', $search_cfg['search_style'] );
+
+		$ttl        = QF_Query_Cache::get_cache_ttl_from_logic( $logic_json );
+		$logic_hash = QF_Query_Cache::logic_hash( $logic_json );
+		$ctx_hash   = md5( wp_json_encode( $settings ) );
+		$cache_key  = QF_Query_Cache::build_cache_key( $logic_json, $paged, $ppp, $ctx_hash, 'html' );
+
+		$cached_html = null;
+		if ( $ttl > 0 && ! QF_Query_Cache::should_bypass() && ! $is_edit_mode && empty( $search_cfg['search_enabled'] ) ) {
+			$cached_html = QF_Query_Cache::get( $cache_key, $logic_hash );
+		}
+
+		if ( null !== $cached_html ) {
+			echo $cached_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return;
+		}
+
+		$query = QF_Query_Parser::get_query( $logic_json, $paged, $ppp );
 
 		if ( ! $query || ! $query->have_posts() ) {
-			if ( \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
+			if ( $is_edit_mode ) {
 				echo '<div class="qf-placeholder">';
 				echo '<p>' . esc_html__( 'No posts found. Check your query settings.', 'query-forge' ) . '</p>';
 				echo '</div>';
@@ -1114,25 +1388,43 @@ class Smart_Loop_Grid extends Widget_Base {
 			return;
 		}
 
+		$qf_total     = (int) $query->found_posts;
+		$qf_max_pages = $this->resolve_elementor_max_pages( $query, $ppp );
+
+		$this->add_render_attribute( 'qf_grid', 'data-qf-settings', $data_settings );
+		$this->add_render_attribute( 'qf_grid', 'data-qf-logic-json', $logic_json );
+		$this->add_render_attribute( 'qf_grid', 'data-qf-total', (string) $qf_total );
+		$this->add_render_attribute( 'qf_grid', 'data-qf-max-pages', (string) $qf_max_pages );
+		$this->add_render_attribute( 'qf_grid', 'data-qf-posts-per-page', (string) $ppp );
+		$this->add_render_attribute( 'qf_grid', 'data-qf-current-page', (string) $paged );
+
+		ob_start();
+
+		echo '<div ';
+		$this->print_render_attribute_string( 'qf_outer' );
+		echo '>';
+
+		$spos = isset( $search_cfg['search_position'] ) ? $search_cfg['search_position'] : 'above';
+		if ( ! empty( $search_cfg['search_enabled'] ) && in_array( $spos, [ 'above', 'both' ], true ) ) {
+			QF_Frontend_Search::render_search_bar( $instance_id, 'above', $search_cfg['search_alignment'], $this->search_style_settings_for_render( $settings ) );
+		}
+
 		$display_type = 'canned';
 
 		$show_results_summary = ! empty( $settings['show_results_summary'] ) && 'yes' === $settings['show_results_summary'];
 		$results_position     = ! empty( $settings['results_summary_position'] ) ? $settings['results_summary_position'] : 'above_grid';
 
-		// Render results summary above grid, if configured.
 		if ( $show_results_summary && 'above_grid' === $results_position ) {
 			$this->render_results_summary( $query );
 		}
 
-		// Render grid.
 		if ( 'template' === $display_type && ! empty( $settings['elementor_template_id'] ) ) {
-			// Use custom Elementor template.
 			$this->render_with_template( $query, $settings );
 		} else {
-			// Use canned styles.
 			$card_style = ! empty( $settings['card_style'] ) ? $settings['card_style'] : 'vertical';
-		?>
-			<div <?php $this->print_render_attribute_string( 'wrapper' ); ?> class="qf-grid qf-card-style-<?php echo esc_attr( $card_style ); ?>">
+			$this->add_render_attribute( 'qf_grid', 'class', 'qf-grid qf-card-style-' . $card_style );
+			?>
+			<div <?php $this->print_render_attribute_string( 'qf_grid' ); ?>>
 				<?php
 				while ( $query->have_posts() ) {
 					$query->the_post();
@@ -1144,13 +1436,15 @@ class Smart_Loop_Grid extends Widget_Base {
 			<?php
 		}
 
-		// Pagination.
+		if ( ! empty( $search_cfg['search_enabled'] ) && in_array( $spos, [ 'below', 'both' ], true ) ) {
+			QF_Frontend_Search::render_search_bar( $instance_id, 'below', $search_cfg['search_alignment'], $this->search_style_settings_for_render( $settings ) );
+		}
+
 		if ( $show_results_summary && 'above_pagination' === $results_position ) {
 			$this->render_results_summary( $query );
 		}
 
 		$pagination_type = ! empty( $settings['pagination_type'] ) ? $settings['pagination_type'] : 'standard';
-		// Free: Load More / Infinite Scroll are not supported; legacy saved values fall back to standard links.
 		if ( in_array( $pagination_type, [ 'load_more', 'infinite_scroll' ], true ) ) {
 			$pagination_type = 'standard';
 		}
@@ -1163,6 +1457,106 @@ class Smart_Loop_Grid extends Widget_Base {
 		if ( $show_results_summary && 'below_pagination' === $results_position ) {
 			$this->render_results_summary( $query );
 		}
+
+		echo '</div>';
+
+		$inner = ob_get_clean();
+
+		if ( $ttl > 0 && ! QF_Query_Cache::should_bypass() && ! $is_edit_mode && empty( $search_cfg['search_enabled'] ) ) {
+			QF_Query_Cache::set( $cache_key, $logic_hash, $inner, $ttl );
+		}
+
+		echo $inner; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Search controls from the widget panel (not logic JSON).
+	 *
+	 * @param array $settings Widget display settings.
+	 * @return array{search_enabled: bool, search_position: string, search_alignment: string, search_field: string, search_style: string}
+	 */
+	private function get_search_settings_for_render( array $settings ): array {
+		$enabled = ! empty( $settings['search_enabled'] ) && 'yes' === $settings['search_enabled'];
+		$pos     = isset( $settings['search_position'] ) ? (string) $settings['search_position'] : 'above';
+		if ( ! in_array( $pos, [ 'above', 'below', 'both' ], true ) ) {
+			$pos = 'above';
+		}
+		$align = isset( $settings['search_alignment'] ) ? (string) $settings['search_alignment'] : 'left';
+		if ( ! in_array( $align, [ 'left', 'center', 'right' ], true ) ) {
+			$align = 'left';
+		}
+		$field = isset( $settings['search_field'] ) ? (string) $settings['search_field'] : 'title';
+		if ( ! in_array( $field, [ 'title', 'content', 'title_content' ], true ) ) {
+			$field = 'title';
+		}
+		$style = isset( $settings['search_style'] ) ? (string) $settings['search_style'] : 'branded';
+		if ( ! in_array( $style, [ 'branded', 'minimal', 'floating' ], true ) ) {
+			$style = 'branded';
+		}
+		return [
+			'search_enabled'   => $enabled,
+			'search_position'  => $pos,
+			'search_alignment' => $align,
+			'search_field'     => $field,
+			'search_style'     => $style,
+		];
+	}
+
+	/**
+	 * Snake_case style keys for QF_Frontend_Search::render_search_bar (Elementor widget settings).
+	 *
+	 * @param array $settings Widget settings.
+	 * @return array<string, mixed>
+	 */
+	private function search_style_settings_for_render( array $settings ): array {
+		$style = isset( $settings['search_style'] ) ? (string) $settings['search_style'] : 'branded';
+		if ( ! in_array( $style, [ 'branded', 'minimal', 'floating' ], true ) ) {
+			$style = 'branded';
+		}
+		$shadow_int = isset( $settings['search_shadow_intensity'] ) ? (string) $settings['search_shadow_intensity'] : 'medium';
+		if ( ! in_array( $shadow_int, [ 'light', 'medium', 'strong' ], true ) ) {
+			$shadow_int = 'medium';
+		}
+		return [
+			'search_style'             => $style,
+			'search_input_text_color'  => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_input_text_color'] ?? '' ) ),
+			'search_placeholder_color' => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_placeholder_color'] ?? '' ) ),
+			'search_input_bg_color'    => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_input_bg_color'] ?? '' ) ),
+			'search_input_font_size'   => isset( $settings['search_input_font_size'] ) ? max( 0, absint( $settings['search_input_font_size'] ) ) : 0,
+			'search_border_radius'     => isset( $settings['search_border_radius'] ) ? max( 0, absint( $settings['search_border_radius'] ) ) : 0,
+			'search_focus_ring_color'  => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_focus_ring_color'] ?? '' ) ),
+			'search_icon_color'        => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_icon_color'] ?? '' ) ),
+			'search_border_color'      => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_border_color'] ?? '' ) ),
+			'search_border_width'      => isset( $settings['search_border_width'] ) ? max( 0, absint( $settings['search_border_width'] ) ) : 0,
+			'search_shadow_color'      => QF_Frontend_Search::sanitize_css_color( (string) ( $settings['search_shadow_color'] ?? '' ) ),
+			'search_shadow_intensity'  => $shadow_int,
+		];
+	}
+
+	/**
+	 * Reliable max page count for pagination.
+	 *
+	 * @param \WP_Query $query Query.
+	 * @param int       $ppp   Posts per page fallback.
+	 * @return int
+	 */
+	private function resolve_elementor_max_pages( $query, $ppp ) {
+		if ( ! is_object( $query ) ) {
+			return 1;
+		}
+		$max = isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 0;
+		if ( $max > 0 ) {
+			return $max;
+		}
+		$found = isset( $query->found_posts ) ? (int) $query->found_posts : 0;
+		$per   = (int) $query->get( 'posts_per_page' );
+		if ( $per <= 0 ) {
+			$per = max( 1, (int) $ppp );
+		}
+		if ( $found <= 0 ) {
+			return 1;
+		}
+		return max( 1, (int) ceil( $found / $per ) );
 	}
 
 	/**
@@ -1234,8 +1628,9 @@ class Smart_Loop_Grid extends Widget_Base {
 			return;
 		}
 
+		$this->add_render_attribute( 'qf_grid', 'class', 'qf-grid qf-template-grid' );
 		?>
-		<div <?php $this->print_render_attribute_string( 'wrapper' ); ?> class="qf-grid qf-template-grid">
+		<div <?php $this->print_render_attribute_string( 'qf_grid' ); ?>>
 			<?php
 			while ( $query->have_posts() ) {
 				$query->the_post();
@@ -1630,7 +2025,7 @@ class Smart_Loop_Grid extends Widget_Base {
 		if ( $pagination ) {
 			$ajax_class = $is_ajax ? ' qf-pagination-ajax' : '';
 			$widget_id = $this->get_id();
-			echo '<div class="qf-pagination' . esc_attr( $ajax_class ) . '" data-widget-id="' . esc_attr( $widget_id ) . '">' . wp_kses_post( $pagination ) . '</div>';
+			echo '<div class="qf-pagination' . esc_attr( $ajax_class ) . '" data-widget-id="' . esc_attr( $widget_id ) . '" data-qf-search-active="0">' . wp_kses_post( $pagination ) . '</div>';
 		}
 	}
 }

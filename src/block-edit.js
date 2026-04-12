@@ -931,6 +931,160 @@ function EditComponent({ attributes, setAttributes }) {
           )}
         </PanelBody>
 
+        <PanelBody title="Search" initialOpen={false}>
+          <ToggleControl
+            label="Show search field"
+            checked={!!attributes.searchEnabled}
+            onChange={(val) => setAttributes({ searchEnabled: val })}
+          />
+          {attributes.searchEnabled && (
+            <>
+              <SelectControl
+                label="Position"
+                value={attributes.searchPosition || 'above'}
+                options={[
+                  { label: 'Above grid', value: 'above' },
+                  { label: 'Below grid', value: 'below' },
+                  { label: 'Above and below grid', value: 'both' },
+                ]}
+                onChange={(val) => setAttributes({ searchPosition: val })}
+              />
+              <SelectControl
+                label="Alignment"
+                value={attributes.searchAlignment || 'left'}
+                options={[
+                  { label: 'Left', value: 'left' },
+                  { label: 'Center', value: 'center' },
+                  { label: 'Right', value: 'right' },
+                ]}
+                onChange={(val) => setAttributes({ searchAlignment: val })}
+              />
+              <SelectControl
+                label="Search field"
+                value={attributes.searchField || 'title'}
+                options={[
+                  { label: 'Title', value: 'title' },
+                  { label: 'Content', value: 'content' },
+                  { label: 'Title and content', value: 'title_content' },
+                ]}
+                onChange={(val) => setAttributes({ searchField: val })}
+              />
+              <SelectControl
+                label="Search bar style"
+                value={attributes.searchStyle || 'branded'}
+                options={[
+                  { label: 'Branded', value: 'branded' },
+                  { label: 'Minimal', value: 'minimal' },
+                  { label: 'Floating', value: 'floating' },
+                ]}
+                onChange={(val) => setAttributes({ searchStyle: val })}
+              />
+              <p>
+                <strong>Search appearance</strong>
+              </p>
+              <QFColorControl
+                label="Input text color"
+                value={attributes.searchInputTextColor || ''}
+                onChange={(val) =>
+                  setAttributes({ searchInputTextColor: val || '' })
+                }
+              />
+              <QFColorControl
+                label="Placeholder color"
+                value={attributes.searchPlaceholderColor || ''}
+                onChange={(val) =>
+                  setAttributes({ searchPlaceholderColor: val || '' })
+                }
+              />
+              <QFColorControl
+                label="Input background color"
+                value={attributes.searchInputBgColor || ''}
+                onChange={(val) =>
+                  setAttributes({ searchInputBgColor: val || '' })
+                }
+              />
+              <RangeControl
+                label="Input font size (px)"
+                value={attributes.searchInputFontSize || 0}
+                onChange={(val) =>
+                  setAttributes({ searchInputFontSize: val ?? 0 })
+                }
+                min={0}
+                max={120}
+                step={1}
+              />
+              <RangeControl
+                label="Border radius (px)"
+                value={attributes.searchBorderRadius || 0}
+                onChange={(val) =>
+                  setAttributes({ searchBorderRadius: val ?? 0 })
+                }
+                min={0}
+                max={100}
+                step={1}
+              />
+              <QFColorControl
+                label="Focus ring color"
+                value={attributes.searchFocusRingColor || ''}
+                onChange={(val) =>
+                  setAttributes({ searchFocusRingColor: val || '' })
+                }
+              />
+              {(attributes.searchStyle || 'branded') === 'branded' && (
+                <>
+                  <QFColorControl
+                    label="Icon color"
+                    value={attributes.searchIconColor || ''}
+                    onChange={(val) =>
+                      setAttributes({ searchIconColor: val || '' })
+                    }
+                  />
+                  <QFColorControl
+                    label="Border color"
+                    value={attributes.searchBorderColor || ''}
+                    onChange={(val) =>
+                      setAttributes({ searchBorderColor: val || '' })
+                    }
+                  />
+                  <RangeControl
+                    label="Border width (px)"
+                    value={attributes.searchBorderWidth || 0}
+                    onChange={(val) =>
+                      setAttributes({ searchBorderWidth: val ?? 0 })
+                    }
+                    min={0}
+                    max={20}
+                    step={1}
+                  />
+                </>
+              )}
+              {(attributes.searchStyle || 'branded') === 'floating' && (
+                <>
+                  <QFColorControl
+                    label="Shadow color"
+                    value={attributes.searchShadowColor || ''}
+                    onChange={(val) =>
+                      setAttributes({ searchShadowColor: val || '' })
+                    }
+                  />
+                  <SelectControl
+                    label="Shadow intensity"
+                    value={attributes.searchShadowIntensity || 'medium'}
+                    options={[
+                      { label: 'Light', value: 'light' },
+                      { label: 'Medium', value: 'medium' },
+                      { label: 'Strong', value: 'strong' },
+                    ]}
+                    onChange={(val) =>
+                      setAttributes({ searchShadowIntensity: val })
+                    }
+                  />
+                </>
+              )}
+            </>
+          )}
+        </PanelBody>
+
         <PanelBody title="Content Fields" initialOpen={false}>
           <ToggleControl
             label="Show Title"
